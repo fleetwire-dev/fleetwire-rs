@@ -1,10 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: cargo
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+  # Cargo version updates are not opened here: Cargo.lock is generated
+  # upstream and exported into this repository, so a lockfile bump merged
+  # here would be overwritten by the next export. Dependabot security
+  # alerts for Cargo dependencies stay enabled in the repository settings.
   - package-ecosystem: github-actions
     directory: /
     schedule:
