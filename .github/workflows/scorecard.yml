@@ -1,0 +1,32 @@
+name: scorecard
+# OpenSSF Scorecard 로 저장소의 공급망 보안 상태를 바깥에서 채점합니다(공개 저장소에서만 뜻이 있습니다).
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "23 3 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    # 비공개 저장소에서는 돌리지 않습니다(결과를 공개 서비스에 올리는 작업입니다).
+    if: github.event.repository.visibility == 'public'
+    permissions:
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results.sarif
