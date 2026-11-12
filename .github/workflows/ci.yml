@@ -1,5 +1,5 @@
 name: ci
-# main 에 올리거나 PR 을 열면 돕니다.
+# Runs on pushes to main and on pull requests.
 on:
   push:
     branches: [main]
@@ -29,7 +29,7 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       - run: cargo +${{ matrix.rust }} test --workspace --all-targets --all-features --locked
-      # `--all-targets` 에는 문서 시험이 들어가지 않습니다. README 의 예제도 여기서 컴파일됩니다.
+      # `--all-targets` does not include doctests. The README examples are compiled here too.
       - run: cargo +${{ matrix.rust }} test --workspace --doc --all-features --locked
 
   lint:
@@ -46,7 +46,7 @@ jobs:
       - run: cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: doc
         env:
-          # 공개 문서가 비공개 항목을 가리키는 링크는 일부러 둔 것이라 그 린트만 허용합니다.
+          # Public docs deliberately link to a few private items, so only that lint is allowed.
           RUSTDOCFLAGS: -D warnings -A rustdoc::private_intra_doc_links
         run: cargo +stable doc --workspace --all-features --no-deps --locked
 
@@ -60,7 +60,7 @@ jobs:
         with:
           command: check advisories bans licenses sources
 
-  # 비밀처럼 생긴 값이 트리에 들어오지 않았는지 봅니다. 허용 목록과 이유는 .gitleaks.toml 에 있습니다.
+  # Checks that nothing secret-shaped entered the tree. The allowlist and its reasons are in .gitleaks.toml.
   secrets:
     runs-on: ubuntu-latest
     steps:

@@ -98,7 +98,7 @@ fn pagination_sibling_reaches_the_caller() {
     assert_eq!(p.current, Some(1));
 }
 
-/// ⚠️ pagination 이 없으면 None 이다 — 전 필드 None 인 Some 과 구분된다.
+/// pagination 이 없으면 None 이다 — 전 필드 None 인 Some 과 구분된다.
 #[test]
 fn absent_pagination_is_none_not_defaulted() {
     let server = MockServer::start();
@@ -159,7 +159,7 @@ fn invitations_pagination_sibling_reaches_the_caller_through_send() {
     assert_eq!(p.next, Some(2));
 }
 
-/// ⚠️ pagination 이 없는 응답이면 `send` 를 거친 뒤에도 `None` 이어야
+/// pagination 이 없는 응답이면 `send` 를 거친 뒤에도 `None` 이어야
 /// 한다(전 필드 `None` 인 `Some` 과는 다른 사실) — 이 구분이 조용히
 /// 회귀할 가능성이 가장 높다는 리뷰 지적에 따라 추가.
 #[test]
@@ -288,7 +288,7 @@ fn send_propagates_a_4xx_as_an_error() {
     assert!(matches!(e, Error::Auth { .. }), "실제: {e:?}");
 }
 
-/// 🔴 이 태스크에서 요구한 `redirect::Policy::none()` 자체를 시험한다.
+/// 이 태스크에서 요구한 `redirect::Policy::none()` 자체를 시험한다.
 /// `transport.rs` 의 동명 성격 테스트는 그 파일이 직접 만든(하드코딩된)
 /// reqwest::Client 로 정책을 시험하므로, `ClientBuilder::build()` 자신이
 /// 그 정책 설정을 빠뜨려도 그 테스트는 계속 통과한다 — 이 테스트가 그
@@ -324,7 +324,7 @@ fn client_builder_does_not_follow_redirects() {
 
 // ------------------------------------------------------------ send_raw
 
-/// ❗❗ **원문이 봉투째 그대로 나온다.** `send` 는 `Envelope<T>` 로 파싱해
+/// **원문이 봉투째 그대로 나온다.** `send` 는 `Envelope<T>` 로 파싱해
 /// `response` 멤버만 넘기고 모델에 없는 형제(`count` — O13)를 **말없이 버린다**.
 /// 드리프트 감지는 그 버려지는 것을 보려고 존재한다.
 #[test]
@@ -357,7 +357,7 @@ fn send_raw_returns_the_whole_body_including_unmodelled_siblings() {
         serde_json::json!(7)
     );
 
-    // ⚠️ 비-vacuity — 같은 응답을 `send` 로 받으면 `count` 는 **사라진다**.
+    // 비-vacuity — 같은 응답을 `send` 로 받으면 `count` 는 **사라진다**.
     //    이 대조가 없으면 위 단언은 "봉투를 안 벗긴다" 만 말하고,
     //    타입 경로가 정말로 정보를 잃는다는 것은 아무도 확인하지 않는다.
     let typed: Page<VehicleSummary> = c
@@ -373,7 +373,7 @@ fn send_raw_returns_the_whole_body_including_unmodelled_siblings() {
     );
 }
 
-/// ❗❗ **4xx 가 `Value` 로 반환되면 안 된다.** `send_raw` 의 반환형이
+/// **4xx 가 `Value` 로 반환되면 안 된다.** `send_raw` 의 반환형이
 /// `serde_json::Value` 라, API 에러 본문을 "성공한 데이터" 로 돌려주는 것이
 /// 가장 그럴듯한 사고다. 상태 게이트가 본문을 보기 **전에** 걸린다.
 #[test]
@@ -394,7 +394,7 @@ fn send_raw_turns_a_4xx_into_an_error_not_a_value() {
     }
 }
 
-/// ❗ 401/408 은 다른 에러로 분류된다 — `send` 와 **같은** 분류를 쓴다는 증거.
+/// 401/408 은 다른 에러로 분류된다 — `send` 와 **같은** 분류를 쓴다는 증거.
 /// (408 은 잠든 차의 정상 응답이고 **과금된다**.)
 #[test]
 fn send_raw_classifies_errors_the_same_way_send_does() {
@@ -423,7 +423,7 @@ fn send_raw_classifies_errors_the_same_way_send_does() {
     }
 }
 
-/// ❗❗ **redirect 를 따라가지 않는다.** `send_raw` 가 `send_inner` 를 공유하므로
+/// **redirect 를 따라가지 않는다.** `send_raw` 가 `send_inner` 를 공유하므로
 /// `Policy::none()` 이 그대로 적용된다 — 별도 경로를 만들었다면 여기서 깨진다.
 #[test]
 fn send_raw_does_not_follow_redirects() {
@@ -521,9 +521,9 @@ fn send_raw_refuses_a_body_that_is_not_json() {
     ));
 }
 
-/// ❗ **재시도하지 않는다.** 기본 `max_attempts = 1` 이 곧 "재시도 없음"이다.
+/// **재시도하지 않는다.** 기본 `max_attempts = 1` 이 곧 "재시도 없음"이다.
 ///
-/// ⚠️ **이 기본값의 근거를 "중복 과금 방지"로 적지 마라 — 두 번 틀렸다.**
+/// **이 기본값의 근거를 "중복 과금 방지"로 적지 마라 — 두 번 틀렸다.**
 /// 첫 판은 408 을 지목했고, 둘째 판은 같은 주장을 *재시도 가능한 5xx* 로
 /// 옮겼다. 둘 다 거짓이다: [`Error::is_retryable`] 이 admit 하는 것은
 /// `TransportNotSent` 와 `500|502|503|504` 뿐이고, 유료 엔드포인트에서
@@ -537,7 +537,7 @@ fn send_raw_refuses_a_body_that_is_not_json() {
 /// 우연이 아님을 보인다 — `default_does_not_retry_even_on_retryable_5xx` 가
 /// `send` 에 대해 하는 것과 같은 형태다.
 ///
-/// ⚠️ **`GetRegion` + [`Client::dispatches`] 를 쓰는 이유.** `GetRegion` 은 리전
+/// **`GetRegion` + [`Client::dispatches`] 를 쓰는 이유.** `GetRegion` 은 리전
 /// 해석 자체이므로 선해석이 돌지 않고(`req_resolves_region`), 이 호출이 내는
 /// 요청은 하나뿐이라 셈이 모호하지 않다. 그리고 세는 대상은 **클라이언트가
 /// 내보낸 수**이지 서버가 받은 수가 아니다 — 그 필드의 doc 이 왜 그 경계를
@@ -581,7 +581,7 @@ fn fake_jwt(scopes: &[&str]) -> String {
 
 /// 회전할 때마다 **다른** 토큰을 돌려주는 refresher + 호출 카운터.
 ///
-/// ⚠️ 매번 다른 값인 것이 핵심이다(final fix wave / Important 1). 401 복구는
+/// 매번 다른 값인 것이 핵심이다(final fix wave / Important 1). 401 복구는
 /// "회전이 일어났는가" 가 아니라 "재시도가 **다른 바이트**를 실어 보내는가" 로
 /// 판정해야 하는데, 같은 값을 돌려주는 refresher 로는 고친 구현과 망가진
 /// 구현(거절당한 토큰 재전송)이 전선 위에서 구별되지 않는다.
@@ -607,7 +607,7 @@ impl TokenRefresher for CountingRefresher {
 
 /// [`Client`] 와 **그 토큰 디렉터리 가드를 함께** 들고 다니는 픽스처.
 ///
-/// ⚠️ 이 묶음이 존재하는 이유가 결함 하나다. 헬퍼 안에서 `TempDir` 를 지역
+/// 이 묶음이 존재하는 이유가 결함 하나다. 헬퍼 안에서 `TempDir` 를 지역
 /// 변수로만 잡으면 헬퍼가 반환하는 순간 가드가 drop 되어 디렉터리가 지워지고,
 /// 그것을 읽는 `Client` 는 뒤이어 `token store: token file not found` 로 죽는다
 /// (실제로 이 모듈 51개 테스트가 그렇게 죽었다). 가드의 수명은 그것을 쓰는
@@ -628,7 +628,7 @@ impl std::ops::Deref for TestClient {
 
 /// mock 서버를 부트스트랩 리전으로 삼은 빌더 + 토큰 디렉터리 가드.
 ///
-/// ⚠️ 가드를 `_` 로 버리지 말 것 — 빌더가 만들 `Client` 가 읽어야 할 디렉터리가
+/// 가드를 `_` 로 버리지 말 것 — 빌더가 만들 `Client` 가 읽어야 할 디렉터리가
 /// 그 자리에서 사라진다. 이름 있는 바인딩(`let (b, _dir) = …`)으로 받아 테스트
 /// 본문 끝까지 살려 둘 것.
 fn test_client_builder(server: &MockServer) -> (ClientBuilder, crate::test_support::TempDir) {
@@ -658,7 +658,7 @@ fn test_client_builder_with(
     // 호출이 `NotFound` 로 실패하므로(부트스트랩 로그인은 이 크레이트의 몫이
     // 아니다) 심는 것 자체는 그대로 필요하다.
     //
-    // ⚠️ **왜 만료 토큰에서 유효 토큰으로 바꿨나** (final fix wave /
+    // **왜 만료 토큰에서 유효 토큰으로 바꿨나** (final fix wave /
     // Important 1). 예전 판은 만료 토큰을 심어 첫 호출이 refresh POST 를
     // 태우게 했다. 그 부트스트랩 회전이 `last_refresh_at` 을 "방금" 으로
     // 찍어 버리므로, 401 복구가 강제하는 회전이 언제나
@@ -825,9 +825,9 @@ fn default_allowlist() -> Vec<String> {
         .collect()
 }
 
-// --- 🔴 신뢰경계 ------------------------------------------------------
+// --- 신뢰경계 ------------------------------------------------------
 
-/// 🔴 악성 리전 URL 을 전부 거부한다. **하나라도 통과하면 자격증명 유출이다.**
+/// 악성 리전 URL 을 전부 거부한다. **하나라도 통과하면 자격증명 유출이다.**
 ///
 /// brief 의 6종에 3종을 더했다 — brief 목록만으로는 "접미 매칭으로 바꾸는"
 /// 뮤테이션(M2)이 **살아남는다**:
@@ -921,7 +921,7 @@ fn accepts_legitimate_region_urls() {
     }
 }
 
-/// ⚠️ 중국 리전은 기본 allowlist 에 **없다**(design O11 — 증거 없음).
+/// 중국 리전은 기본 allowlist 에 **없다**(design O11 — 증거 없음).
 /// 필요한 사용자는 `allow_region_host` 로 연다. 기본값이 열려 있는지
 /// 닫혀 있는지를 값으로 고정한다 — 편의를 이유로 뒤집히면 실패한다.
 #[test]
@@ -991,7 +991,7 @@ fn adopts_a_valid_region_url_and_switches_base() {
     assert_eq!(region_calls, 1, "이미 해석됐으면 다시 묻지 않는다");
 }
 
-/// 🔴 거부된 리전 URL 은 **채택되지 않고** 부트스트랩이 유지된다.
+/// 거부된 리전 URL 은 **채택되지 않고** 부트스트랩이 유지된다.
 /// "에러가 났다" 가 아니라 base 가 안 바뀌었다는 것을 확인한다.
 #[test]
 fn refuses_an_untrusted_region_url_and_keeps_bootstrap() {
@@ -1036,7 +1036,7 @@ fn missing_fleet_api_base_url_is_not_adopted() {
 
 // --- 412 복구 ---------------------------------------------------------
 
-/// 🔴 fix round 1 (review Important 1): **부트스트랩이 아닌 리전의 계정은
+/// fix round 1 (review Important 1): **부트스트랩이 아닌 리전의 계정은
 /// 첫 호출에서 412 를 태우지 않는다.**
 ///
 /// 두 개의 mock 서버로 기전을 직접 잰다 — A = 부트스트랩(리전 해석만
@@ -1191,7 +1191,7 @@ fn paid_req() -> crate::api::vehicles::GetVehicleData {
 
 /// 해석 **가능한** 리전을 내는 mock — 유료/무료 짝 테스트의 공통 전제.
 ///
-/// ❗❗ 이것이 없으면 유료 테스트가 **우연히** 통과한다. `resolve_region` 이
+/// 이것이 없으면 유료 테스트가 **우연히** 통과한다. `resolve_region` 이
 /// 실패하면 412 arm 의 `if …is_ok()` 가 false 라 재발사 자체가 일어나지 않기
 /// 때문이다 — 즉 "유료라서 안 나갔다" 와 "리전을 못 풀어서 못 나갔다" 가
 /// 구별되지 않는다. A5c-2a T23 의 첫 판 하네스가 정확히 그 상태였고, 리뷰가
@@ -1213,19 +1213,19 @@ fn mount_resolvable_region(server: &MockServer) {
         .mount(server);
 }
 
-/// 🔴 **유료 412: 재발사는 없고, 복구는 일어난다** (T23 fix round 2).
+/// **유료 412: 재발사는 없고, 복구는 일어난다** (T23 fix round 2).
 ///
 /// # 이 테스트가 고정하는 두 가지 — 둘 다 있어야 한다
 ///
 /// 1. **`send` 한 번에 유료 요청은 한 번.** 412 는 첫 요청이 서버에 도달해 답을
 ///    받았다는 증거이고(`Error::billing` → `Billed`), 재발사는 곧 두 번째 청구다.
-/// 2. ★ **그럼에도 자가 치유는 된다.** 첫 판(fix round 1)은 `may_recover` 자체를
+/// 2. **그럼에도 자가 치유는 된다.** 첫 판(fix round 1)은 `may_recover` 자체를
 ///    `false` 로 만들어 `invalidate_region`/`resolve_region` 까지 건너뛰었고, 그래서
 ///    **유료만 부르는 소비자는 영원히 못 낫는다** — 매 호출이 같은 stale 리전으로
 ///    412 를 맞고 그 하나하나가 `Billed` 다. 중복 과금을 막으려다 무한 과금을 만든
 ///    셈이었다.
 ///
-/// # ❗❗ 왜 mock 서버가 **둘**인가 — 첫 판의 픽스처는 공허했다
+/// # 왜 mock 서버가 **둘**인가 — 첫 판의 픽스처는 공허했다
 ///
 /// 한 서버에 `412`(`up_to_n_times(1)`) + `200` 을 얹으면 두 번째 `send` 는 **복구와
 /// 무관하게** 200 을 받는다. mock 의 412 가 소진됐기 때문이다 — 즉 "복구가 됐다" 와
@@ -1236,7 +1236,7 @@ fn mount_resolvable_region(server: &MockServer) {
 /// `A` 의 리전 응답은 **첫 번째는 A, 그 다음부터는 B** 를 가리킨다. 복구가 일어나야만
 /// 두 번째 `send` 의 base 가 `B` 로 바뀌므로, `send #2` 의 성공이 곧 복구의 증거다.
 ///
-/// ⚠️ 무료 짝 `region_412_triggers_one_reresolve_and_retry` 는 한 번의 `send` 안에서
+/// 무료 짝 `region_412_triggers_one_reresolve_and_retry` 는 한 번의 `send` 안에서
 /// `vehicles == 2` 다. 두 테스트를 나란히 두는 것이 pricing 축의 대조군이다.
 #[test]
 fn a_412_on_a_paid_endpoint_is_not_re_fired() {
@@ -1279,7 +1279,7 @@ fn a_412_on_a_paid_endpoint_is_not_re_fired() {
         .mount(&b);
 
     let b_url: crate::Url = b.uri().parse().unwrap();
-    // ⚠️ 이 테스트는 mock 서버를 `b` 라는 이름으로 이미 쓰고 있다 — 빌더를 `b` 로
+    // 이 테스트는 mock 서버를 `b` 라는 이름으로 이미 쓰고 있다 — 빌더를 `b` 로
     // 받으면 그것을 가려 버린다.
     let (builder, _dir) = test_client_builder(&a);
     let c = builder
@@ -1292,7 +1292,7 @@ fn a_412_on_a_paid_endpoint_is_not_re_fired() {
     };
 
     // ── send #1 — A 가 412. 재발사 없음. ─────────────────────────────────
-    // ⚠️ `unwrap_err()` 를 쓸 수 없다 — `VehicleData` 는 의도적으로 `Debug` 가
+    // `unwrap_err()` 를 쓸 수 없다 — `VehicleData` 는 의도적으로 `Debug` 가
     //    아니다(PII 가 패닉 메시지로 새는 것을 타입으로 막는다).
     let e = match c.send(&paid_req()) {
         Ok(_) => panic!("send #1 must fail: A always answers 412"),
@@ -1313,7 +1313,7 @@ fn a_412_on_a_paid_endpoint_is_not_re_fired() {
         "🔴 send #1 에서 유료 요청이 두 번 나갔다 = 중복 과금"
     );
 
-    // ── send #2 — ★ 복구가 일어났으므로 base 가 B 로 바뀌어 성공해야 한다. ──
+    // ── send #2 — 복구가 일어났으므로 base 가 B 로 바뀌어 성공해야 한다. ──
     assert!(
         c.send(&paid_req()).is_ok(),
         "🔴🔴 유료만 부르는 소비자가 자가 치유하지 못한다. 412 arm 이 \
@@ -1329,7 +1329,7 @@ fn a_412_on_a_paid_endpoint_is_not_re_fired() {
         (1, 1),
         "A 에 1건(412) + B 에 1건(200) — 즉 **send 당 정확히 1건**, 재발사 0"
     );
-    // ⚠️ 비-vacuity: 리전이 **실제로** 재해석됐다(사전 1 + 412 복구 1).
+    // 비-vacuity: 리전이 **실제로** 재해석됐다(사전 1 + 412 복구 1).
     //    1 이면 "리전을 못 풀어서 재발사가 없었다" 와 구별되지 않는다.
     assert_eq!(
         count(&ra, "/api/1/users/region"),
@@ -1338,14 +1338,14 @@ fn a_412_on_a_paid_endpoint_is_not_re_fired() {
     );
 }
 
-/// 🔴 **유료 401: 재발사는 없고, 회전은 일어난다** — 412 짝과 같은 논증.
+/// **유료 401: 재발사는 없고, 회전은 일어난다** — 412 짝과 같은 논증.
 ///
-/// ⚠️ 401 은 `Error::Auth { pricing: Some(Data) }` 이고 설계 §9.2 가 그것을 청구된
+/// 401 은 `Error::Auth { pricing: Some(Data) }` 이고 설계 §9.2 가 그것을 청구된
 /// 것으로 판정한다. 그러나 `reject_generation` 은 **그대로 부른다** — 그것이 다음
 /// 호출에 *다른 바이트*를 실어 보내는 유일한 수단이고, 그것까지 건너뛰면 유료
 /// 소비자는 같은 stale 토큰으로 401 을 무한히 사게 된다(fix round 2 의 발단).
 ///
-/// # ❗❗ 401 응답을 **토큰 값으로** 가른다 — 412 짝과 같은 비-vacuity 논증
+/// # 401 응답을 **토큰 값으로** 가른다 — 412 짝과 같은 비-vacuity 논증
 ///
 /// `up_to_n_times(1)` 로 401 을 한 번만 내면 두 번째 `send` 는 회전과 무관하게
 /// 200 을 받는다. 그래서 여기서는 **처음 심어 둔 토큰을 실은 요청만** 401 을 받고,
@@ -1365,7 +1365,7 @@ fn a_401_on_a_paid_endpoint_is_not_re_fired() {
         "픽스처 전제: 부트스트랩은 채택이라 회전이 없어야 한다"
     );
 
-    // ❗ 그 토큰을 실은 요청만 401. 다른 토큰이면 200.
+    // 그 토큰을 실은 요청만 401. 다른 토큰이면 200.
     Mock::given(method("GET"))
         .and(path(paid_path.clone()))
         .and(header("authorization", format!("Bearer {seed}").as_str()))
@@ -1403,7 +1403,7 @@ fn a_401_on_a_paid_endpoint_is_not_re_fired() {
         "🔴 send #1 에서 유료 요청이 두 번 나갔다 = 중복 과금"
     );
 
-    // ── send #2 — ★ 세대가 거절됐으므로 새 토큰으로 성공해야 한다. ────────
+    // ── send #2 — 세대가 거절됐으므로 새 토큰으로 성공해야 한다. ────────
     assert!(
         c.send(&paid_req()).is_ok(),
         "🔴🔴 유료만 부르는 소비자가 자가 치유하지 못한다. 401 arm 이 \
@@ -1417,7 +1417,7 @@ fn a_401_on_a_paid_endpoint_is_not_re_fired() {
         2,
         "두 번의 send 에 유료 요청 2건 — 즉 **send 당 정확히 1건**"
     );
-    // ⚠️ 비-vacuity: 회전이 **실제로** 정확히 1회 일어났다.
+    // 비-vacuity: 회전이 **실제로** 정확히 1회 일어났다.
     assert_eq!(
         refresh_calls.load(Ordering::SeqCst),
         1,
@@ -1596,7 +1596,7 @@ fn region_resolution_stays_within_budget_when_preflight_fails() {
     );
 }
 
-/// ⚠️ 리전 캐시 무효화는 **자기가 본 generation 일 때만** 성립한다.
+/// 리전 캐시 무효화는 **자기가 본 generation 일 때만** 성립한다.
 #[test]
 fn stale_generation_cannot_clear_newer_region_cache() {
     let server = MockServer::start();
@@ -1681,7 +1681,7 @@ fn current_generation_does_clear_the_region_cache() {
 
 // --- 401 복구 ---------------------------------------------------------
 
-/// 🔴 401 → 회전 1회 강제 → **다른 토큰**으로 재전송 1회. 2번째 401 은 종료.
+/// 401 → 회전 1회 강제 → **다른 토큰**으로 재전송 1회. 2번째 401 은 종료.
 ///
 /// # 이 테스트는 무엇을 대체했는가 (final fix wave / Important 1)
 ///
@@ -1775,7 +1775,7 @@ fn auth_401_forces_a_rotation_and_retries_with_a_different_token() {
 /// 사건을 "token refresh suppressed" 로 설명한다. 그래서 **직전 응답 오류**를
 /// 우선한다.
 ///
-/// # ❗❗ 이 테스트의 전제가 **바뀌었다** (T23 fix round 2)
+/// # 이 테스트의 전제가 **바뀌었다** (T23 fix round 2)
 ///
 /// 예전 doc 은 *"Fleet 요청이 1회뿐 ⇒ 회전이 간격에 막혔다"* 고 적었다. 유료
 /// 401 이 더 이상 **재발사하지 않으므로 그 추론은 이제 거짓**이다 — 1회인 이유는
@@ -1830,7 +1830,7 @@ fn a_suppressed_recovery_refresh_still_reports_the_401s_billing() {
     );
 }
 
-/// 🔴 **재시도의 토큰 계층 오류가 직전 401 을 덮어쓰면 안 된다** — `unwrap_or` 가
+/// **재시도의 토큰 계층 오류가 직전 401 을 덮어쓰면 안 된다** — `unwrap_or` 가
 /// 하는 일 (T23 fix round 2 신설).
 ///
 /// # 왜 새로 필요한가
@@ -1845,7 +1845,7 @@ fn a_suppressed_recovery_refresh_still_reports_the_401s_billing() {
 /// 재시도 시도 → 2번째 반복의 토큰 계층이 `MIN_REFRESH_INTERVAL` 에 막혀 실패 →
 /// 그때 돌려주는 것은 **서버의 401** 이어야 한다.
 ///
-/// ⚠️ 무료라 `billing()` 은 양쪽 다 `NotBilled` 라 판정에 쓸 수 없다. 판정은
+/// 무료라 `billing()` 은 양쪽 다 `NotBilled` 라 판정에 쓸 수 없다. 판정은
 /// **메시지**로 한다 — 변이는 "rotation interval" 을 내고 원본은 "invalid
 /// authentication" 을 낸다. 그 차이가 곧 *"인증 거절을 회전 억제로 잘못 설명한다"*
 /// 는 운영자 오독이다.
@@ -1861,7 +1861,7 @@ fn a_suppressed_recovery_prefers_the_401_over_the_token_layer_error() {
         .mount(&server);
 
     let c = client_bootstrapped_by_a_rotation(&server);
-    // ❗ `GetRegion` — **무료**다. 그래서 401 복구 arm 이 `continue` 를 밟고
+    // `GetRegion` — **무료**다. 그래서 401 복구 arm 이 `continue` 를 밟고
     //    `unwrap_or` 줄에 실제로 도달한다.
     let e = c.send(&GetRegion).unwrap_err();
 
@@ -1892,7 +1892,7 @@ fn a_suppressed_recovery_prefers_the_401_over_the_token_layer_error() {
 /// 에 채널로 신호를 보낸다. 세대를 올리는 쪽은 그 신호를 기다리므로
 /// "토큰 확보 → 세대 상승" 순서가 **인과적으로** 보장된다.
 ///
-/// ⚠️ 남는 시간 의존은 하나뿐이고 성질이 다르다: 세대 상승이 응답 지연
+/// 남는 시간 의존은 하나뿐이고 성질이 다르다: 세대 상승이 응답 지연
 /// 안에 끝나야 합니다. 응답은 신호를 보낸 뒤 지연으로 여유를 둡니다. 그 작업은 프로세스 내 뮤텍스 + 로컬 파일 I/O 뿐이라
 /// 네트워크 대기가 없다.
 struct SignalOnArrival {
@@ -1913,9 +1913,9 @@ impl fleetwire_testkit::Respond for SignalOnArrival {
     }
 }
 
-/// ⚠️ 세대가 다르면 **아무것도 무효화하지 않고** 즉시 재전송한다(design §5.1).
+/// 세대가 다르면 **아무것도 무효화하지 않고** 즉시 재전송한다(design §5.1).
 ///
-/// 🔴 brief 원안은 `bump_generation_out_of_band` 를 send **이전**에 불렀는데,
+/// brief 원안은 `bump_generation_out_of_band` 를 send **이전**에 불렀는데,
 /// 그러면 send 가 이미 오른 세대를 들고 나가므로 "세대 불일치" 분기 자체가
 /// 실행되지 않는다 — 게다가 판정 지표였던 refresh 횟수는 어느 구현에서도
 /// 움직이지 않는다(캐시를 지워도 디스크 토큰 **채택**으로 복구되어 refresh
@@ -1961,7 +1961,7 @@ fn concurrent_401_with_stale_generation_does_not_invalidate() {
         (sending.join().unwrap(), racing.join().unwrap())
     });
 
-    // ⚠️ 이 한 줄이 **거짓 통과**를 막는다 (final fix wave / Minor 6).
+    // 이 한 줄이 **거짓 통과**를 막는다 (final fix wave / Minor 6).
     // 극단적인 스케줄링 지연으로 `send` 가 세대 상승보다 **먼저** 복구를
     // 끝내면, 시험하려던 "세대 불일치" 분기는 한 번도 실행되지 않은 채
     // 아래 두 단언이 나란히 통과한다(복구가 캐시 채택으로 세대를 올렸다면
@@ -2046,7 +2046,7 @@ fn auth_and_region_retries_do_not_reset_each_other() {
     assert_eq!(region, 2, "리전 해석은 최악에도 2회 — 사전 1 + 412 복구 1");
 }
 
-/// ⚠️ 412 바디의 계정 UUID 가 에러 메시지에 남지 않는다.
+/// 412 바디의 계정 UUID 가 에러 메시지에 남지 않는다.
 #[test]
 fn account_uuid_is_redacted() {
     let server = MockServer::start();
@@ -2124,7 +2124,7 @@ fn opt_in_retries_only_transient_5xx() {
     }
 }
 
-/// 🔴 Fix round 1 (Important 1): 401/412 복구 예산은 **`send()` 호출
+/// Fix round 1 (Important 1): 401/412 복구 예산은 **`send()` 호출
 /// 전체에서 공유**되고, opt-in 재시도 시도마다 새로 주어지지 않는다.
 ///
 /// 응답을 401 → 503 → 401 → 503 순으로 스크립트한다. **공유(고친)**
@@ -2176,9 +2176,9 @@ fn recovery_budget_is_shared_across_the_whole_send_not_per_retry_attempt() {
     );
 }
 
-/// ⚠️ `TransportUnknown` 은 켜도 재시도하지 않는다.
+/// `TransportUnknown` 은 켜도 재시도하지 않는다.
 ///
-/// ❗ **이 변종에 한해서는 "재시도 = 중복 과금"이 실제로 성립한다** — 다만
+/// **이 변종에 한해서는 "재시도 = 중복 과금"이 실제로 성립한다** — 다만
 /// 확정이 아니라 가능성으로. 유료 엔드포인트의 `TransportUnknown` 은
 /// [`Error::billing`] 이 [`crate::Billing::Unknown`] 으로 판정하는 유일한 모양이고
 /// (서버가 이미 처리·과금했는지 알 수 없다), 그래서 재시도는 **두 번째 청구일 수
@@ -2213,7 +2213,7 @@ fn transport_unknown_is_never_retried_even_when_enabled() {
 /// 백오프 경로가 기본값에서 실행되지 않는다 — "죽은 코드"가 아니라
 /// "조건부 코드"임을 고정한다(design §9.0).
 ///
-/// ⚠️ Fix round 1 (test-strength finding): 원래 판은 소요시간(<500ms)만
+/// Fix round 1 (test-strength finding): 원래 판은 소요시간(<500ms)만
 /// 쟀는데, 이는 **기전이 아니라 값**을 단언하는 셈이라 M1(기본값 1→3)이
 /// 살아남았다 — 지수 백오프 초반 두 잠(≈100ms+200ms, jitter 로 더 줄어듦)
 /// 합이 우연히 500ms 밑이라서다. 요청 수를 세면(규율 3) 기본값이 몇으로
@@ -2240,7 +2240,7 @@ fn backoff_path_is_not_entered_by_default() {
         t0.elapsed()
     );
 
-    // 🔴 기전 단언: 503 은 재시도 **가능** 판정이지만, 기본값에서는 몇 번을
+    // 기전 단언: 503 은 재시도 **가능** 판정이지만, 기본값에서는 몇 번을
     // 보냈는지로 직접 잰다 — M1(기본값 1→3)이 여기서 죽는다.
     let reqs = server.received_requests().unwrap();
     assert_eq!(
@@ -2250,7 +2250,7 @@ fn backoff_path_is_not_entered_by_default() {
     );
 }
 
-/// 🔴 완전히 결정적인 체인 deadline 시험: deadline 을 `ZERO` 로 주면
+/// 완전히 결정적인 체인 deadline 시험: deadline 을 `ZERO` 로 주면
 /// **첫 실패 직후 재시도가 단 한 번도 없어야 한다** — 지수 백오프의
 /// jitter 가 무엇을 뽑든 상관없다(`elapsed >= ZERO` 는 항상 참이므로
 /// 첫 실패 시점에 이미 예산 소진). `max_attempts` 는 5 로 커 보이게 열어
@@ -2279,7 +2279,7 @@ fn zero_chain_deadline_permits_no_retries_at_all() {
     let elapsed = t0.elapsed();
 
     assert!(matches!(&e, Error::Api { status, .. } if status.as_u16() == 503));
-    // 🔴 결정적 단언: 요청 수 == 1 이 이 시험의 핵심이다. 아래 소요시간
+    // 결정적 단언: 요청 수 == 1 이 이 시험의 핵심이다. 아래 소요시간
     // 단언은 그 위에 얹는 보너스 sanity check 일 뿐(백오프에 진짜로
     // 들어갔다면 잡아낼 만큼만 느슨하게) — 요청 수가 이미 1 로 확정됐으면
     // 로컬 wiremock 왕복이 어쩌다 오래 걸리는 것(느린 CI/WSL) 자체는
@@ -2296,7 +2296,7 @@ fn zero_chain_deadline_permits_no_retries_at_all() {
     );
 }
 
-/// ⚠️ 체인 deadline 은 **백오프 잠까지 포함한** 전체 소요를 제한한다 —
+/// 체인 deadline 은 **백오프 잠까지 포함한** 전체 소요를 제한한다 —
 /// per-attempt timeout 만으로는 못 잡는 것을 design §9.2·Task 4 의 교훈이
 /// 지적한 바로 그 모양이다. [`zero_chain_deadline_permits_no_retries_at_all`]
 /// 이 이 성질의 **완전 결정적** 증거이고, 이 테스트는 그와 별개로 "0 이
@@ -2435,8 +2435,8 @@ fn read_client_refuses_token_with_command_scope_before_sending() {
     );
 }
 
-/// 스코프가 확실히 없으면 **네트워크 이전에** 막는다(💰 0).
-/// ⚠️ "에러가 났다"로는 부족하다 — 서버 수신 요청이 0건임을 단언한다.
+/// 스코프가 확실히 없으면 **네트워크 이전에** 막는다(0).
+/// "에러가 났다"로는 부족하다 — 서버 수신 요청이 0건임을 단언한다.
 #[test]
 fn missing_scope_blocks_before_any_request() {
     let server = MockServer::start();
@@ -2449,7 +2449,7 @@ fn missing_scope_blocks_before_any_request() {
 
     // scp 에 vehicle_device_data 가 **없는** JWT 를 심는다.
     let c = test_client_with_scopes(&server, &["openid", "offline_access"]);
-    // ⚠️ `.unwrap_err()` 를 쓰지 않는다 — `VehicleSummary` 는 REQ-18 상
+    // `.unwrap_err()` 를 쓰지 않는다 — `VehicleSummary` 는 REQ-18 상
     // 의도적으로 `Debug` 를 구현하지 않으므로(모델 doc 참조), `Result<T,
     // E>::unwrap_err` 의 `T: Debug` 바운드에 걸린다. 수동 매치로 그 요구를
     // 피한다.
@@ -2471,7 +2471,7 @@ fn missing_scope_blocks_before_any_request() {
     );
 }
 
-/// ⚠️ JWT 가 아니거나 파싱 불가면 **통과**시킨다(fail-open).
+/// JWT 가 아니거나 파싱 불가면 **통과**시킨다(fail-open).
 /// 서명 미검증 payload 는 권위가 없다 — 최종 판정은 서버의 403 이다.
 #[test]
 fn opaque_token_passes_through() {
@@ -2493,7 +2493,7 @@ fn opaque_token_passes_through() {
         .unwrap();
 
     assert!(got.items.is_empty());
-    // ⚠️ 총 요청 수가 아니라 **이 엔드포인트로 나간** 요청 수를 센다. 리전
+    // 총 요청 수가 아니라 **이 엔드포인트로 나간** 요청 수를 센다. 리전
     // 캐시가 비어 있으면 `send` 이 `/api/1/users/region` 사전해석을 먼저
     // 태우는데(§4.2, T7 에서 이미 다룸), 그건 이 테스트의 관심사가 아니다
     // — mock 이 경로를 가리지 않아 그 요청도 서버에 도달해 기록된다.
@@ -2509,7 +2509,7 @@ fn opaque_token_passes_through() {
     );
 }
 
-/// ⚠️ Indeterminate 와 ContainsRequiredScope 가 **같은 경로**를 탄다.
+/// Indeterminate 와 ContainsRequiredScope 가 **같은 경로**를 탄다.
 /// 호출부에서 갈라지면 fail-open 이 거기서 깨진다(design §10).
 #[test]
 fn indeterminate_and_contains_take_the_same_path() {
@@ -2552,7 +2552,7 @@ fn indeterminate_and_contains_take_the_same_path() {
 }
 
 /// 403 은 `MissingScope` 가 아니라 `Error::Api` 다 — 과금 판정이 다르기 때문이다.
-/// MissingScope 는 네트워크 이전 차단(💰 0), 403 은 돈이 든 서버 거절이다.
+/// MissingScope 는 네트워크 이전 차단(0), 403 은 돈이 든 서버 거절이다.
 #[test]
 fn server_403_is_api_error_not_missing_scope() {
     let server = MockServer::start();
@@ -2601,7 +2601,7 @@ fn server_403_is_api_error_not_missing_scope() {
 
 // --- T9: send_guarded (비용 게이트) -----------------------------------
 
-/// ⚠️ offline 이면 유료 요청이 **0회** 나간다. 게이트의 존재 이유다.
+/// offline 이면 유료 요청이 **0회** 나간다. 게이트의 존재 이유다.
 #[test]
 fn guard_skips_the_paid_call_when_offline() {
     let server = MockServer::start();
@@ -2662,7 +2662,7 @@ fn guard_executes_when_online() {
     ));
 }
 
-/// ⚠️ 게이트가 실패하면 fail-closed — 유료 호출을 강행하지 않는다.
+/// 게이트가 실패하면 fail-closed — 유료 호출을 강행하지 않는다.
 #[test]
 fn guard_failure_does_not_force_the_paid_call() {
     let server = MockServer::start();
@@ -2687,7 +2687,7 @@ fn guard_failure_does_not_force_the_paid_call() {
     );
 }
 
-/// ⚠️ backseat_token 이 게이트 응답에 있는데 에러·로그로 새면 안 된다.
+/// backseat_token 이 게이트 응답에 있는데 에러·로그로 새면 안 된다.
 #[test]
 fn guard_does_not_leak_backseat_token() {
     let server = MockServer::start();
@@ -2813,7 +2813,7 @@ fn metered_surfaces_the_rate_limit_headers() {
     assert_eq!((rl.limit, rl.remaining, rl.reset_raw), (60, 59, 57));
 }
 
-/// ⚠️ 무과금 엔드포인트는 헤더가 없다 → None (실측 E4).
+/// 무과금 엔드포인트는 헤더가 없다 → None (실측 E4).
 #[test]
 fn metered_is_none_for_an_unmetered_endpoint() {
     let server = MockServer::start();
@@ -2851,7 +2851,7 @@ fn partial_or_unparsable_headers_yield_none() {
     assert!(c.send_metered(&GetRegion).unwrap().rate_limit.is_none());
 }
 
-/// ⚠️ 한 `Client` 로 metered 호출 다음 unmetered 호출을 연달아 해도 두
+/// 한 `Client` 로 metered 호출 다음 unmetered 호출을 연달아 해도 두
 /// 번째 결과에 첫 번째 값이 새면 안 된다 — 값이 응답 그 자체가 아니라
 /// `Client` 위 어딘가의 공유 슬롯에 얹혀 있다면 이 순서에서 정확히
 /// 깨진다. `Metered<T>` 를 응답과 함께 반환하는 설계(전역

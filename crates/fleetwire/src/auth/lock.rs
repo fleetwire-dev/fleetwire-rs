@@ -57,7 +57,7 @@ impl From<std::io::Error> for LockError {
 
 /// A guard that lives for as long as the lock is held. It releases the lock in `Drop`.
 ///
-/// ⚠️ This type **does not delete the lock file** — on the success, failure or panic path
+/// This type **does not delete the lock file** — on the success, failure or panic path
 /// alike. Deleting it would give rise to a process holding the existing inode and a process
 /// taking a new inode at the same time, breaking mutual exclusion (design §7.3). Cleanup when
 /// a process dies is done not by `unlink` but by **the kernel reclaiming the fd** — a flock
@@ -73,7 +73,7 @@ impl Drop for LockGuard {
         // 언와인딩 중에도 이 Drop 은 실행된다 — 패닉한 프로세스가 락을 쥔 채
         // 남지 않는다(`the_lock_is_released_when_the_guard_drops_during_a_panic`).
         //
-        // ⚠️ **이 한 줄은 현재 구조에서는 없어도 동작이 같다.** 가드가 `File` 을
+        // **이 한 줄은 현재 구조에서는 없어도 동작이 같다.** 가드가 `File` 을
         // 소유하므로, 이 줄이 없어도 바로 뒤에서 `File` 이 drop 되며 `close(2)` 가
         // 열린 파일 서술자를 회수하고 커널이 flock 을 푼다. 실제로 이 줄을 지우는
         // 변이는 어떤 테스트도 깨뜨리지 않는다(등가 변이) — 테스트가 부실해서가
@@ -111,7 +111,7 @@ pub(crate) fn acquire(path: &Path, deadline: Duration) -> Result<LockGuard, Lock
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        // ⚠️ `create_dir_all` 이 아니라 `DirBuilder::mode(0o700)` 이다. 락 파일은
+        // `create_dir_all` 이 아니라 `DirBuilder::mode(0o700)` 이다. 락 파일은
         // 토큰과 **같은 디렉터리**에 있으므로(`TokenStore::lock_path`), 여기서
         // umask 를 먹은 0755 로 디렉터리를 만들면 그 뒤의 모든
         // `TokenStore::store`/`load` 가 `BadDirPermissions` 로 영구히 실패한다.

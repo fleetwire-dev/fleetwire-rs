@@ -135,7 +135,7 @@ impl VehicleEndpoint for GetVehicle {
 
 /// The sub-data that can be selected with the `endpoints=` parameter of `vehicle_data`.
 ///
-/// ⚠️ Why this is an enum: a free-form string turns a typo into a **paid request**.
+/// Why this is an enum: a free-form string turns a typo into a **paid request**.
 /// It is `#[non_exhaustive]`, so Tesla adding a value is not a breaking change.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -182,7 +182,7 @@ impl DataEndpoint {
     }
 }
 
-/// `GET /api/1/vehicles/{vin}/vehicle_data` — ⚠️ **paid** ($0.002/request).
+/// `GET /api/1/vehicles/{vin}/vehicle_data` — **paid** ($0.002/request).
 ///
 /// The only way to construct this is [`GetVehicleData::new`], which runs
 /// [`encode_vin_segment`] once at construction (same pattern as
@@ -224,7 +224,7 @@ impl crate::sealed::Sealed for GetVehicleData {}
 impl FleetGet for GetVehicleData {
     passthrough_endpoint!(GetVehicleData, VehicleData);
 
-    /// ⚠️ Depends on the request's values — `vehicle_location` is only
+    /// Depends on the request's values — `vehicle_location` is only
     /// added when [`DataEndpoint::LocationData`] was requested. This is the
     /// reason A1 made `required_scopes` a **method** rather than a constant.
     fn required_scopes(&self) -> ScopeExpr {
@@ -264,7 +264,7 @@ impl VehicleEndpoint for GetVehicleData {
     }
 }
 
-/// `GET /api/1/vehicles/{vin}/nearby_charging_sites` — ⚠️ **paid**
+/// `GET /api/1/vehicles/{vin}/nearby_charging_sites` — **paid**
 /// ($0.002/request), the crate's second and last billed endpoint (O1).
 ///
 /// Query params are `count`/`radius`/`detail` — **not** `page`/`per_page`.
@@ -363,7 +363,7 @@ impl VehicleEndpoint for GetNearbyChargingSites {
 /// hand-written the same way [`ListVehicles`]'s is, to prove the mechanism
 /// generalizes past the one endpoint it was originally built against.
 ///
-/// ⚠️ `per_page`'s server-side ceiling is documented as 25 (O1), but **this
+/// `per_page`'s server-side ceiling is documented as 25 (O1), but **this
 /// client does not clamp it**. The server is the authority on the limit; if
 /// Tesla changes it, a client-side clamp would become wrong before the
 /// server does. An out-of-range value is passed through unchanged and left
@@ -382,7 +382,7 @@ pub struct ListInvitations {
     encoded_segment: String,
     /// Requested page number (1-based). Omitted from the query when `None`.
     pub page: Option<u64>,
-    /// Requested page size. Omitted from the query when `None`. ⚠️ Not
+    /// Requested page size. Omitted from the query when `None`. Not
     /// clamped to the documented 25 ceiling — see the type's doc.
     pub per_page: Option<u64>,
 }
@@ -452,7 +452,7 @@ impl VehicleEndpoint for ListInvitations {
 
 /// Defines an unbilled, parameterless vehicle endpoint that takes only a VIN (A4 Task 7).
 ///
-/// ⚠️ `GetFleetTelemetryErrors` (below) was **deliberately written by hand without this
+/// `GetFleetTelemetryErrors` (below) was **deliberately written by hand without this
 /// macro** — when a mutation test changes the macro body, all 6 types made with this macro
 /// change at the same time, so it is impossible to tell whether the table test really looks
 /// at all 7 separately or passes by accident on "if one of them is right the rest must be
@@ -464,7 +464,7 @@ macro_rules! simple_vehicle_endpoint {
     ($name:ident, $segment:literal, $doc:literal) => {
         #[doc = $doc]
         ///
-        /// ⚠️ The response is a `serde_json::Value` — no real response has been seen,
+        /// The response is a `serde_json::Value` — no real response has been seen,
         /// and guessed field names are not made into a strongly typed public API. A
         /// type will be given once the structure is settled.
         pub struct $name {
@@ -498,7 +498,7 @@ macro_rules! simple_vehicle_endpoint {
 
         impl FleetGet for $name {
             passthrough_endpoint!($name, serde_json::Value);
-            /// ☠️ **Measured wrong for at least one member of this macro.**
+            /// **Measured wrong for at least one member of this macro.**
             /// On 2026-09-18 a token holding `vehicle_device_data` (and
             /// `user_data`, `vehicle_location`, but **not** `vehicle_cmds`)
             /// called every endpoint below. Eleven succeeded;
@@ -541,7 +541,7 @@ macro_rules! simple_vehicle_endpoint {
 simple_vehicle_endpoint!(
     GetMobileEnabled,
     "mobile_enabled",
-    "`GET /api/1/vehicles/{vin}/mobile_enabled` — whether the Tesla mobile app has remote access enabled for this vehicle. ☠️ **Measured 2026-09-18: refused with `HTTP 403 Forbidden: Unauthorized missing scopes` by a token that held the `vehicle_device_data` this type declares.** The other eleven endpoints in this macro succeeded with that same token, so the gap is this endpoint's, not the macro's. The vehicle command scope is the likely requirement — a read-only client will not be granting it, so `fleetwire-capture` records this one as a skipped endpoint rather than a failure."
+    "`GET /api/1/vehicles/{vin}/mobile_enabled` — whether the Tesla mobile app has remote access enabled for this vehicle. **Measured 2026-09-18: refused with `HTTP 403 Forbidden: Unauthorized missing scopes` by a token that held the `vehicle_device_data` this type declares.** The other eleven endpoints in this macro succeeded with that same token, so the gap is this endpoint's, not the macro's. The vehicle command scope is the likely requirement — a read-only client will not be granting it, so `fleetwire-capture` records this one as a skipped endpoint rather than a failure."
 );
 simple_vehicle_endpoint!(
     GetRecentAlerts,
@@ -572,11 +572,11 @@ simple_vehicle_endpoint!(
 /// `GET /api/1/vehicles/{vin}/fleet_telemetry_errors` — recent fleet
 /// telemetry streaming errors for this vehicle.
 ///
-/// ⚠️ The response is a `serde_json::Value` — no real response has been seen, and guessed
+/// The response is a `serde_json::Value` — no real response has been seen, and guessed
 /// field names are not made into a strongly typed public API. A type will be given once the
 /// structure is settled.
 ///
-/// ⚠️ This type was **written by hand** without the [`simple_vehicle_endpoint!`] macro — its
+/// This type was **written by hand** without the [`simple_vehicle_endpoint!`] macro — its
 /// field/method shape is identical to the other 6 (mobile_enabled, recent_alerts,
 /// release_notes, service_data, drivers, fleet_telemetry_config), but this is so that a
 /// mutation test can be applied to this one type alone. Injecting a mutation into the macro
@@ -647,7 +647,7 @@ mod tests {
             per_page: Some(50),
         };
         assert_eq!(r.path(), "/api/1/vehicles");
-        // ⚠️ O1: 16개 중 유료는 vehicle_data·nearby_charging_sites 뿐이다.
+        // O1: 16개 중 유료는 vehicle_data·nearby_charging_sites 뿐이다.
         assert!(matches!(r.pricing(), Pricing::NotCharged));
         let q = r.query().to_encoded();
         assert!(
@@ -700,7 +700,7 @@ mod tests {
         assert_eq!(r.path(), "/api/1/vehicles/5YJ3E1EA7KF000000");
     }
 
-    /// ⚠️ `vehicle_location` is required only when location is requested.
+    /// `vehicle_location` is required only when location is requested.
     #[test]
     fn location_data_requires_the_location_scope() {
         let with = GetVehicleData::new(
@@ -731,7 +731,7 @@ mod tests {
         );
     }
 
-    /// ⚠️ If location_data is not specified, it must be absent from the query (F9 double
+    /// If location_data is not specified, it must be absent from the query (F9 double
     /// opt-in).
     #[test]
     fn location_data_is_absent_from_the_query_unless_asked() {
@@ -854,7 +854,7 @@ mod tests {
         );
     }
 
-    /// ⚠️ The client does not block values above 25 — that is left to the server's judgment.
+    /// The client does not block values above 25 — that is left to the server's judgment.
     #[test]
     fn invitations_does_not_clamp_per_page() {
         let r = ListInvitations::new("5YJ3E1EA1JF000001", None, Some(999)).unwrap();

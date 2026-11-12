@@ -1,0 +1,34 @@
+name: Bug report
+description: Something in fleetwire behaves differently from its documentation
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste tokens, VINs, coordinates or raw API responses.** Redact them first.
+        For a security problem, use private vulnerability reporting instead (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: fleetwire version and Rust version
+      placeholder: fleetwire 0.1.0, rustc 1.89.0
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest code or steps that reproduce it
+      render: rust
+  - type: dropdown
+    id: billed
+    attributes:
+      label: Does this involve a billed endpoint?
+      options: ["No", "Yes — GetVehicleData", "Yes — GetNearbyChargingSites", "Not sure"]
+    validations:
+      required: true

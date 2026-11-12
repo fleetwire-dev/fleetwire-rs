@@ -21,7 +21,7 @@ use crate::redaction::body_preview;
 
 /// The timeout of the refresh request.
 ///
-/// ⚠️ It **must be shorter** than the `state_deadline` (10 seconds) of `TokenManager`. During
+/// It **must be shorter** than the `state_deadline` (10 seconds) of `TokenManager`. During
 /// a refresh the other callers wait up to `state_deadline` for the `refreshing` flag of the
 /// state cell to be lowered, so if this exceeded 10 seconds, sibling callers would receive a
 /// `token state lock:` error in the middle of a slow but successful refresh (design §9.1).
@@ -33,7 +33,7 @@ use super::MSG_MAX;
 
 /// The response JSON. If `expires_in` is missing it is set to 0.
 ///
-/// ⚠️ Correction from review round 1 (minor #4): a **lower bound** on this value is not A2's
+/// Correction from review round 1 (minor #4): a **lower bound** on this value is not A2's
 /// policy. All A2 clamps is the `MAX_TOKEN_LIFETIME` upper bound in the [`crate::auth`] module
 /// docs, and the lower bound (A2 carry-forward #1) does not exist yet — Task 5 is to
 /// introduce it on `TokenManager` as `MIN_REFRESH_INTERVAL`. Until then `expires_in: 0` (or
@@ -48,7 +48,7 @@ struct TokenResponse {
 
 /// The ureq backend of [`TokenRefresher`].
 ///
-/// # ⚠️ No retries
+/// # No retries
 ///
 /// When [`refresh`](TokenRefresher::refresh) fails (timeouts included) it **never** retries
 /// on its own, and no consumer code wrapping this type may retry either. The server may
@@ -92,7 +92,7 @@ impl HttpRefresher {
     }
 }
 
-/// ⚠️ Tokens and secrets are never printed.
+/// Tokens and secrets are never printed.
 impl core::fmt::Debug for HttpRefresher {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("HttpRefresher")
@@ -120,7 +120,7 @@ impl TokenRefresher for HttpRefresher {
         #[allow(clippy::disallowed_methods)]
         let sent = self.agent.post(self.token_url.as_str()).send_form(form);
 
-        // ⚠️ 서버가 회전을 완료했는데 응답만 유실됐을 수 있습니다(헤더만 오고 본문이 멈춘 경우 포함).
+        // 서버가 회전을 완료했는데 응답만 유실됐을 수 있습니다(헤더만 오고 본문이 멈춘 경우 포함).
         // 그 경우 우리가 가진 refresh_token 은 이미 무효이고 복구는 재-OAuth 뿐입니다.
         // **재시도하지 않습니다** — 재시도는 악화입니다.
         let timed_out = || Error::Auth {

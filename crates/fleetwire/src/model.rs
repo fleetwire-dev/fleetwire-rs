@@ -43,7 +43,7 @@ pub(crate) struct Envelope<T> {
     /// without the key (every non-list endpoint, and even some list
     /// responses) still parses instead of failing deserialization.
     ///
-    /// ⚠️ The top-level `count` sibling is **not** modeled here — the one
+    /// The top-level `count` sibling is **not** modeled here — the one
     /// measured sample (a single-vehicle account) showed it equal to
     /// `pagination.count`, so modeling it separately would just produce two
     /// fields with the same name and the same value. Whether the two can
@@ -139,7 +139,7 @@ pub struct Page<T> {
 
 /// `vehicle_data` response.
 ///
-/// ⚠️ Sub-object fields have **not been verified against a live response**.
+/// Sub-object fields have **not been verified against a live response**.
 /// Per this crate's founding response-typing policy, speculative field
 /// names are not exposed as a strongly-typed public API — each sub-object
 /// stays a `serde_json::Value` until its shape is verified, at which point
@@ -188,7 +188,7 @@ pub struct VehicleData {
 
 /// `nearby_charging_sites` response.
 ///
-/// ⚠️ The shape of the sub-lists' items has **not been verified against a
+/// The shape of the sub-lists' items has **not been verified against a
 /// live response** — per this crate's founding response-typing policy,
 /// speculative field names are not exposed as a strongly-typed public API,
 /// so each list stays `Vec<serde_json::Value>` until its shape is verified
@@ -215,7 +215,7 @@ pub struct NearbyChargingSites {
 
 /// `invitations` response item — a vehicle-sharing invitation.
 ///
-/// ⚠️ **Unverified shape** — no live response has been observed for this
+/// **Unverified shape** — no live response has been observed for this
 /// endpoint. Per this crate's founding response-typing policy, speculative
 /// field names are not exposed as a strongly-typed public API, so this stays
 /// minimal (only `id`, itself kept as raw JSON rather than guessed at) with

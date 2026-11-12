@@ -38,7 +38,7 @@ pub(crate) const MAX_JWT_PAYLOAD_BYTES: usize = 8192;
 /// **Only `DoesNotContainRequiredScope` causes a request to be skipped.** The other two both
 /// send the request — fail-open made into a type rather than a convention.
 ///
-/// ⚠️ The variants **carry no data** (REQ-18). This type is a verdict, not a diagnostic, and
+/// The variants **carry no data** (REQ-18). This type is a verdict, not a diagnostic, and
 /// if values read from the token (scope strings, claims) were carried here they would flow
 /// straight out into logs and errors. `the_verdict_carries_no_token_derived_data` holds this
 /// in place.
@@ -87,7 +87,7 @@ fn scp_items(access_token: &str) -> Option<Vec<String>> {
     // `payload_b64.len() <= MAX` 를 보장하고 URL_SAFE_NO_PAD 는 n 글자를
     // `floor(n*3/4)` 바이트로 디코드하므로 여기 도달한 payload 는 최대 6144B 다.
     //
-    // ⚠️ 이 관계는 **상수를 바꿔도 깨지지 않는다** — 두 검사가 같은 상수를 읽기
+    // 이 관계는 **상수를 바꿔도 깨지지 않는다** — 두 검사가 같은 상수를 읽기
     // 때문에 `MAX_JWT_PAYLOAD_BYTES` 를 올리면 인코딩 게이트도 같이 올라간다.
     // 따라서 여기에 런타임 분기(`if ... { return Indeterminate }`)를 두면 어떤
     // 입력으로도 도달할 수 없는 죽은 가지가 된다. 불변식이 실제로 깨지려면
@@ -98,7 +98,7 @@ fn scp_items(access_token: &str) -> Option<Vec<String>> {
         payload.len() <= MAX_JWT_PAYLOAD_BYTES,
         "인코딩 상한이 디코딩 길이를 함의한다는 불변식이 깨졌다"
     );
-    // ⚠️ 이 early return 을 `.unwrap_or(Value::Null)` 로 바꾸지 말 것. 지금은
+    // 이 early return 을 `.unwrap_or(Value::Null)` 로 바꾸지 말 것. 지금은
     // `value` 를 `scp` 하나에만 쓰므로 `Null.get("scp") == None` 덕에 결과가 같지만,
     // `exp`/`aud` 등 두 번째 클레임을 읽는 순간 등가성이 깨진다 — 파싱 실패한 토큰이
     // "모든 클레임이 부재한 토큰" 으로 둔갑해 클레임별로 다른 판정을 낳는다.
@@ -161,7 +161,7 @@ pub(crate) fn observe_scopes(
     // 모델링되지 않은 스코프(예: offline_access)는 버린다. 요구 스코프는 항상
     // 우리 엔드포인트 타입에서 오므로 알려진 값이고, 미지 항목을 버려도 판정이 틀리지 않는다.
     //
-    // ⚠️ 여기가 원소 **타입**에는 엄격(비문자열 하나면 Indeterminate)하면서 스코프
+    // 여기가 원소 **타입**에는 엄격(비문자열 하나면 Indeterminate)하면서 스코프
     // **값**에는 관대한 비대칭 지점이다. 이 관대함은 증거가 강제한 것이다 —
     // `offline_access` 를 버리지 못하면 실 토큰 전부가 Indeterminate 로 무너져
     // 기능이 죽는다. 대가로 치르는 실패 모드를 적어 둔다: **Tesla 가 모델링된
@@ -206,7 +206,7 @@ pub(crate) fn observe_forbidden(access_token: &str) -> UnverifiedScopeObservatio
 
 #[cfg(test)]
 mod tests {
-    // ⚠️ `use base64::Engine as _;` 를 여기 두지 않는다 — `use super::*` 가 모듈의
+    // `use base64::Engine as _;` 를 여기 두지 않는다 — `use super::*` 가 모듈의
     // 같은 import 를 이미 끌어오므로 중복이 되고, 이 크레이트는 `-D warnings` 라
     // `unused_imports` 가 곧 빌드 실패다.
     use super::*;
@@ -318,7 +318,7 @@ mod tests {
 
     /// A payload over the bound is Indeterminate.
     ///
-    /// ⚠️ This test reaches **only as far as the encoding gate** — the property "caught before
+    /// This test reaches **only as far as the encoding gate** — the property "caught before
     /// allocation" is not proven here. That is owned by
     /// [`the_length_bound_is_checked_on_the_encoded_form_before_any_buffer_is_allocated`]
     /// (because this payload's decoded length is over the bound too, so it is caught by
@@ -340,7 +340,7 @@ mod tests {
         let token = jwt_with_payload(&serde_json::json!({
             "scp": ["vehicle_device_data"]
         }));
-        // ⚠️ ScopeExpr::All 은 Vec<ScopeExpr> 를 받는다 — Vec<Scope> 가 아니다.
+        // ScopeExpr::All 은 Vec<ScopeExpr> 를 받는다 — Vec<Scope> 가 아니다.
         let required = ScopeExpr::All(vec![
             ScopeExpr::One(Scope::VehicleDeviceData),
             ScopeExpr::One(Scope::VehicleLocation),
@@ -470,7 +470,7 @@ mod tests {
         );
     }
 
-    /// ⚠️ With `["scp": [1, 2]]` alone, the mutant that changes `any(|v| !v.is_string())` to
+    /// With `["scp": [1, 2]]` alone, the mutant that changes `any(|v| !v.is_string())` to
     /// `all(...)` survives — every element is a non-string, so the two predicates have the
     /// same value. Only a mixed array kills that mutant.
     #[test]
@@ -533,7 +533,7 @@ mod tests {
 
     /// Pins only that **the verdict type carries no data**.
     ///
-    /// ⚠️ This must not be read as REQ-18 being fully discharged in this module. The only
+    /// This must not be read as REQ-18 being fully discharged in this module. The only
     /// thing prevented here is "token-derived values being carried out in a variant"; if
     /// someone later puts a claim into a `tracing` call or a `panic!` message, this test
     /// stays silent. The fact that this module currently has no logging at all takes care of

@@ -54,7 +54,7 @@ const MSG_MAX: usize = 512;
 /// dead token. 30 days is 90 times Tesla's actual access token lifetime (around 8 hours), so it
 /// never touches a normal value, yet it is small enough to stop a rotation storm.
 ///
-/// # ⚠️ There is no lower bound on the other side — and **one must not be added**
+/// # There is no lower bound on the other side — and **one must not be added**
 ///
 /// **A hole symmetric to the one above is open on the low side.** [`TokenSet::is_fresh`] is
 /// `expires_at > now + EXPIRY_SKEW` (60 seconds), so if the server gives `expires_in_secs <= 60`
@@ -71,13 +71,13 @@ const MSG_MAX: usize = 512;
 /// trades avoiding a rotation storm (cost, rate limit) for **authentication failure (loss of
 /// function)**, which is not an even exchange.
 ///
-/// ⚠️ **This argument still holds.** The storm having been closed below does **not** make a lower
+/// **This argument still holds.** The storm having been closed below does **not** make a lower
 /// bound safe — it was closed precisely because the way it was closed was not value manipulation.
 /// If someone later reads this as "there is an interval now, so surely `max` is fine", that is a
 /// sign the paragraph above needs to be read again. The two mechanisms are not substitutes for
 /// each other.
 ///
-/// # ✅ The storm was closed by A3 Task 5 — by **frequency**, not by value
+/// # The storm was closed by A3 Task 5 — by **frequency**, not by value
 ///
 /// The safe solution was not to manipulate the value but to **put a minimum interval on rotation
 /// itself**, and that is [`MIN_REFRESH_INTERVAL`](crate::MIN_REFRESH_INTERVAL) (= 60 seconds, the
@@ -112,7 +112,7 @@ const MAX_TOKEN_LIFETIME: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 /// pairing, concurrent 401s kill a token that was just refreshed: the 401 for a request A sent
 /// with generation N makes it discard the N+1 that B has already produced.
 ///
-/// # ⚠️ Do not change this into a "refresh count"
+/// # Do not change this into a "refresh count"
 ///
 /// That this value also rises on **disk adoption** (the path that takes over a token a sibling
 /// process rotated) is not a mistake. The question the generation answers is "is the token I
@@ -151,14 +151,14 @@ pub type Generation = u64;
 /// authentication failure to avoid a rotation storm. Instead it limits **the frequency of
 /// rotation itself**. The lifetime value is recorded exactly as the server gave it.
 ///
-/// # ⚠️ A repeated request inside the interval is an **error**, not the cache
+/// # A repeated request inside the interval is an **error**, not the cache
 ///
 /// Simply returning the cached (but already stale) token would send a dead token, which is
 /// **literally the same failure** as the `max` lower bound rejected above. So it stops with
 /// [`Error::Auth`]`{ pricing: None }`, naming the cause. `pricing` is `None` because no endpoint
 /// was reached — [`Error::billing`] must count it as [`crate::Billing::NotBilled`].
 ///
-/// # ⚠️ It is process-local
+/// # It is process-local
 ///
 /// The time of the last rotation is kept only in process memory (adding a field to the token
 /// file would change A2's storage format contract). A new process can refresh immediately
@@ -173,7 +173,7 @@ pub const MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 /// [`Refreshed::new`] exists instead — without it the public [`TokenRefresher`] **could not be
 /// implemented** outside the crate, and we would ship a public trait nobody can implement.
 ///
-/// # ⚠️ `Debug` is written by hand (REQ-18)
+/// # `Debug` is written by hand (REQ-18)
 ///
 /// This type carries **both** the access token and the refresh token, is re-exported from the
 /// crate root, and is created right after the transport layer (A3) parses the refresh response
@@ -195,7 +195,7 @@ pub struct Refreshed {
     /// an unrepresentable lifetime collapses into "already expired" and every call rotates the
     /// chain.
     ///
-    /// ⚠️ **There is no lower bound on the low side.** If 60 seconds or less is reported, the
+    /// **There is no lower bound on the low side.** If 60 seconds or less is reported, the
     /// token is judged about to expire the moment it is recorded (the expiry margin is 60
     /// seconds), and every later call fires a refresh again. Raising the value is a way of
     /// sending a dead token and so is not a safe solution — how this condition is handled is
@@ -274,7 +274,7 @@ impl Refreshed {
 pub trait TokenRefresher: Send + Sync {
     /// Fetches a new token set using `refresh_token`.
     ///
-    /// # ⚠️ Implementations must not retry this call
+    /// # Implementations must not retry this call
     ///
     /// The server may already have completed the rotation with only the response lost — in that
     /// case the `refresh_token` the caller holds is already dead, and the only way to revive it
@@ -292,7 +292,7 @@ pub trait TokenRefresher: Send + Sync {
 /// persist failure and the cache replacement would happen in different critical sections, and a
 /// task caught between them could fire one more rotation without seeing the forbidden flag.
 ///
-/// ⚠️ The [`Generation`] and the last rotation time, added later, are **under the same mutex**
+/// The [`Generation`] and the last rotation time, added later, are **under the same mutex**
 /// too. The generation in particular must be one with the cache — if the critical section that
 /// changed the cache and the one that bumped the generation were separate, a caller caught
 /// between them would receive a generation that does not match its token and would invalidate a
@@ -313,10 +313,10 @@ struct State {
     /// Time of the last **successful** refresh (unix seconds). It is the reference point of the
     /// minimum rotation interval.
     ///
-    /// ⚠️ It lives only in process memory — it is not written to disk. See "It is process-local"
+    /// It lives only in process memory — it is not written to disk. See "It is process-local"
     /// on [`MIN_REFRESH_INTERVAL`].
     ///
-    /// ⚠️ Disk adoption (taking over a sibling process's rotation) does **not touch** this.
+    /// Disk adoption (taking over a sibling process's rotation) does **not touch** this.
     /// Adoption sent no refresh POST, so it never produced the traffic we are trying to
     /// suppress. If the adoption time were recorded here as well, we could not rotate when we
     /// actually need to for as long as a sibling stays busy.
@@ -324,7 +324,7 @@ struct State {
     /// A rotated token could not be left on disk — **this manager** no longer refreshes. See the
     /// "Persist-failure contract" on [`TokenManager::access_token`] below.
     ///
-    /// ⚠️ **The scope is the manager, not the process.** This flag lives in `State`, so if one
+    /// **The scope is the manager, not the process.** This flag lives in `State`, so if one
     /// more [`TokenManager`] pointing at the same directory is created in the same process, that
     /// one starts with clean state and may attempt a rotation with the old refresh token (that
     /// configuration is exactly `two_managers_sharing_a_directory_collapse_into_one_refresh`).
@@ -344,22 +344,22 @@ struct State {
     /// disk adoption (step 6) of [`TokenManager::access_token_with_generation`] compare against
     /// this value so that the same token is not handed out again.
     ///
-    /// ⚠️ Why "empty the cache" is not enough — a 401 is a server-side event and does not move
+    /// Why "empty the cache" is not enough — a 401 is a server-side event and does not move
     /// the token's `expires_at`. If only the cache is emptied, the next call re-reads **the same
     /// file** at step 6, and since `is_fresh` is true adopts it as is, resending the very bytes
     /// that were just rejected — the retry becomes entirely pointless. So what is remembered is
     /// the **value**, not the generation.
     ///
-    /// ⚠️ Because it is a value comparison, a **different** token that a sibling process has
+    /// Because it is a value comparison, a **different** token that a sibling process has
     /// rotated in is still adopted normally. A rejection does not block the adoption path
     /// wholesale.
     ///
-    /// ⚠️ It is **not cleared** even after a successful rotation or adoption. There is no reason
+    /// It is **not cleared** even after a successful rotation or adoption. There is no reason
     /// to clear it (the next token has a different value and so is not caught by the gate), and
     /// leaving it makes "bytes that were rejected once are never sent out again" hold regardless
     /// of the path. Its size is fixed at one slot — the next rejection overwrites it.
     ///
-    /// ⚠️ It is a token value, so it is never carried in any diagnostic string (REQ-18). `State`
+    /// It is a token value, so it is never carried in any diagnostic string (REQ-18). `State`
     /// does not derive `Debug`.
     rejected_access_token: Option<String>,
 }
@@ -391,7 +391,7 @@ enum Forbid {
 struct Snapshot {
     refresh_forbidden: Option<Forbid>,
     last_refresh_at: Option<u64>,
-    /// ⚠️ This is a token value. It is not carried in diagnostic strings (REQ-18).
+    /// This is a token value. It is not carried in diagnostic strings (REQ-18).
     rejected: Option<String>,
 }
 
@@ -440,7 +440,7 @@ pub struct TokenManager {
     state_deadline: Duration,
     /// The lock is held briefly, and during a refresh the `refreshing` flag makes other callers
     /// wait ([`cell`]).
-    /// ⚠️ Tokens rotate, so this is not put in a `OnceCell`/`OnceLock` (REQ-15).
+    /// Tokens rotate, so this is not put in a `OnceCell`/`OnceLock` (REQ-15).
     state: cell::StateCell<State>,
     /// Number of times this manager **went to acquire** the file lock (test-only
     /// instrumentation).
@@ -541,7 +541,7 @@ impl TokenManager {
     ///    [`MIN_REFRESH_INTERVAL`](crate::MIN_REFRESH_INTERVAL) has not passed since the
     ///    previous rotation, **refuse here** (the cache is not returned instead — the rationale
     ///    is in that constant's documentation).
-    ///    ⚠️ This comes **after** adoption (step 6) — a token a sibling process has refreshed is
+    ///    This comes **after** adoption (step 6) — a token a sibling process has refreshed is
     ///    adopted regardless of the interval. The interval blocks only the POST we send.
     /// 9. Refresh exactly once.
     /// 10. Disk-first persist → replace memory only after it succeeds.
@@ -635,7 +635,7 @@ impl TokenManager {
     /// reuse of an already invalidated chain, which is certain destruction. Only the
     /// unrecoverable side is blocked.
     ///
-    /// # ⚠️ The refresh implementation must set its own timeout
+    /// # The refresh implementation must set its own timeout
     ///
     /// While calling [`TokenRefresher::refresh`], this function **holds both** the `refreshing`
     /// flag and **the file lock**. Neither has a timeout of its own (exactly the form design
@@ -679,7 +679,7 @@ impl TokenManager {
     /// - So after a persist failure this manager forbids refresh itself **within this manager**.
     ///   It does, however, keep adopting if a valid token appears on disk — there is no reason
     ///   to also block the case where a sibling process refreshed successfully.
-    /// - ⚠️ **That the scope is the manager means it is not the process.** The forbidden flag
+    /// - **That the scope is the manager means it is not the process.** The forbidden flag
     ///   lives in this instance's state, so if one more [`TokenManager`] pointing at the same
     ///   directory is created in the same process, that one starts with clean state. The
     ///   stronger form (a process-global, per-directory ban) is global state and is not
@@ -712,7 +712,7 @@ impl TokenManager {
     /// current". [`TokenManager::access_token`] is a thin wrapper around this function, so the
     /// orchestration, errors and contracts are **all described in that documentation**.
     ///
-    /// ⚠️ The returned generation is a value read **inside the same critical section**. Reading
+    /// The returned generation is a value read **inside the same critical section**. Reading
     /// it after releasing the lock would see a value another task rotated in the meantime, and
     /// the generation and token would no longer be a matching pair.
     ///
@@ -735,7 +735,7 @@ impl TokenManager {
         // 2. 캐시 확인 — 유효하면 파일 락을 건드리지 않습니다. 기다리는 동안 형제가 이미 갱신해
         //    두었으면 여기서 걸립니다.
         //
-        //    ⚠️ `is_rejected` 가 함께 걸린 이유(final fix wave / Important 1): `is_fresh` 만으로는
+        //    `is_rejected` 가 함께 걸린 이유(final fix wave / Important 1): `is_fresh` 만으로는
         //    **서버가 이미 거절한** 토큰을 걸러낼 수 없습니다. 401 은 `expires_at` 을 움직이지 않습니다.
         if let Some(set) = state.cached.as_ref()
             && set.is_fresh(self.clock.as_ref(), EXPIRY_SKEW)
@@ -895,7 +895,7 @@ impl TokenManager {
     /// current one, and the next [`TokenManager::access_token`] takes the adoption/rotation
     /// path.
     ///
-    /// # ⚠️ The generation comparison is all there is to this function
+    /// # The generation comparison is all there is to this function
     ///
     /// Emptying unconditionally without the comparison lets concurrent 401s kill a token that
     /// was just refreshed: the 401 for a request A sent with generation N makes it discard the
@@ -906,7 +906,7 @@ impl TokenManager {
     /// a failure but "another request has already fixed it", so the caller can simply resend
     /// with the new token.
     ///
-    /// # ⚠️ No refresh happens here
+    /// # No refresh happens here
     ///
     /// It only empties the cache. Rotating directly here would bypass **both** the single-flight
     /// and the [`MIN_REFRESH_INTERVAL`] gate — those two exist only on the
@@ -948,7 +948,7 @@ impl TokenManager {
     ///   `is_fresh` and goes all the way to the refresh path — exactly **once** (after a
     ///   successful rotation the new token value differs and is not caught by the gate).
     ///
-    /// # ⚠️ Nothing at all is bypassed
+    /// # Nothing at all is bypassed
     ///
     /// No refresh is called here. All that is forced is "the next call cannot escape through the
     /// cache or adoption"; the actual rotation still happens only inside the in-process mutex +
@@ -958,7 +958,7 @@ impl TokenManager {
     /// blocks it, the rejection mark **remains**, and the next call after the interval has
     /// passed rotates.
     ///
-    /// # ⚠️ The generation comparison is here for the same reason as in [`TokenManager::invalidate_generation`]
+    /// # The generation comparison is here for the same reason as in [`TokenManager::invalidate_generation`]
     ///
     /// If the generation has already advanced (a sibling has already rotated), it **does nothing
     /// and returns `Ok`**. Rejecting without the comparison would let a late-arriving 401 put a

@@ -60,7 +60,7 @@ fn posts_form_urlencoded_without_client_secret() {
     assert_eq!(got.expires_in_secs, 28_800);
 }
 
-/// ⚠️ client_secret 을 절대 보내지 않는다(public client).
+/// client_secret 을 절대 보내지 않는다(public client).
 #[test]
 fn never_sends_client_secret() {
     let server = MockServer::start();
@@ -93,7 +93,7 @@ fn oauth_error_becomes_error_not_panic() {
     assert!(e.to_string().contains("invalid_grant"), "실제: {e}");
 }
 
-/// ⚠️ 토큰이 에러 메시지에 새지 않는다.
+/// 토큰이 에러 메시지에 새지 않는다.
 #[test]
 fn refresh_token_never_appears_in_error() {
     let server = MockServer::start();

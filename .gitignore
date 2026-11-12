@@ -3,6 +3,6 @@
 .env
 .env.*
 !.env.example
-# 토큰 파일은 저장소에 들어오면 안 됩니다.
+# Token files must never enter the repository.
 tokens.json
 *.token

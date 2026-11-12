@@ -391,7 +391,7 @@ fn rate_limit_is_some_when_all_three_headers_parse() {
     assert_eq!(r.rate_limit, Some((60, 59, 57)));
 }
 
-/// ⚠️ All three headers present, but one is **not numeric** → `None`,
+/// All three headers present, but one is **not numeric** → `None`,
 /// not a value with the bad field silently replaced by `0`.
 ///
 /// This is the case

@@ -1,0 +1,8 @@
+
+# <type>: <summary in the imperative, lower case, no trailing period>
+#
+# Types: feat, fix, docs, test, refactor, ci, chore
+# Body: what changed and why; how it was verified (commands and results).
+# Say so explicitly if the change touches a billed endpoint or the token store.
+#
+# Enable this template locally with:  git config commit.template .gitmessage

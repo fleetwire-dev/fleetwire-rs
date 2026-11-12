@@ -267,7 +267,7 @@ fn refresh_within_min_interval_errors_and_sends_nothing() {
         .access_token()
         .expect_err("간격 안에서는 캐시가 아니라 에러여야 한다");
 
-    // ⚠️ "에러가 났다" 만으로는 부족하다 — POST 를 보내 놓고 에러를 낸 구현도
+    // "에러가 났다" 만으로는 부족하다 — POST 를 보내 놓고 에러를 낸 구현도
     //    같은 모양이다. 기구를 센다.
     assert_eq!(
         refresher.call_count(),
@@ -306,7 +306,7 @@ fn clock_going_backwards_counts_as_interval_not_met() {
     assert_eq!(mgr.access_token().expect("first"), "NEW");
     let after_first = refresher.call_count();
 
-    // ⚠️ 역행 폭을 30초로 잡는 이유(vacuous pass 방지). 디스크 토큰의 만료는
+    // 역행 폭을 30초로 잡는 이유(vacuous pass 방지). 디스크 토큰의 만료는
     //    `T0 + 0` 이고 신선도 판정은 `expires_at > now + 60` 이다. 1시간을
     //    되감으면 `T0 > T0 - 3600 + 60` 이 **참**이 되어 그 토큰이 도로
     //    "신선" 해지고, 호출은 게이트에 닿기도 전에 디스크 채택으로 성공한다 —
@@ -408,7 +408,7 @@ fn generation_increases_when_a_siblings_rotation_is_adopted() {
 
 #[test]
 fn stale_generation_cannot_invalidate_newer_token() {
-    // ⚠️ 이 비교가 없으면 동시 401 이 방금 갱신된 토큰을 죽인다: A 가 세대 N 으로
+    // 이 비교가 없으면 동시 401 이 방금 갱신된 토큰을 죽인다: A 가 세대 N 으로
     //    보낸 요청의 401 이, B 가 이미 만든 N+1 을 버리게 한다.
     let (mgr, refresher, clock, _dir) = interval_manager("gen-stale", SHORT_BUT_USABLE);
     let (g1, _t1) = mgr.access_token_with_generation().expect("first");
@@ -443,7 +443,7 @@ fn stale_generation_cannot_invalidate_newer_token() {
 
 #[test]
 fn a_blocked_second_caller_gets_the_interval_error_not_a_file_lock_timeout() {
-    // ⚠️ **이 테스트가 무엇을 위해 있는가** (리뷰 fix round).
+    // **이 테스트가 무엇을 위해 있는가** (리뷰 fix round).
     //
     // "세대를 락을 놓은 뒤에 읽는" 구현은 borrow checker 가 막아 준다고 적었는데,
     // 그건 **순진한 형태**(놓은 가드를 다시 쓰는 것, E0382)에만 참이다. 다시 잡는
@@ -589,7 +589,7 @@ fn rotating_manager(
     (mgr, refresher, clock, dir)
 }
 
-/// 🔴 거절은 **`is_fresh` 를 넘어** 회전을 강제한다 — 정확히 1회.
+/// 거절은 **`is_fresh` 를 넘어** 회전을 강제한다 — 정확히 1회.
 ///
 /// 이 테스트가 `invalidating_the_current_generation_clears_the_cache` 와 다른
 /// 점이 이 그룹의 존재 이유다. 무효화는 캐시만 비우므로, 캐시와 디스크가 **둘 다
@@ -830,7 +830,7 @@ fn concurrent_callers_are_served_from_memory_rather_than_each_taking_the_file_lo
     // single-flight 가 있으면 뒤늦은 호출자는 **메모리에서** 답을 받고 파일 락을
     // 아예 건드리지 않는다. 없으면 15개가 동시에 락을 시도해 전부 Timeout 이다.
     //
-    // ⚠️ Task 7 리뷰가 잡은 구멍(M2 오분류): 반환값과 호출 횟수만 보면 **캐시
+    // Task 7 리뷰가 잡은 구멍(M2 오분류): 반환값과 호출 횟수만 보면 **캐시
     // 확인을 지운 구현도 이 테스트를 통과한다.** 뒤늦은 호출자가 도착할 때쯤엔
     // 승자가 이미 `_guard` 를 놓았으므로 deadline 0 에서도 락이 잡히기 때문이다.
     // 같은 값을 다른 기구로 얻은 것이라 이름이 거짓말이 된다. 그래서 기구
@@ -889,7 +889,7 @@ fn two_managers_sharing_a_directory_collapse_into_one_refresh() {
     // 프로세스 안의 두 `TokenManager` 는 이 목적에서 형제 프로세스 둘이다.
     let dir = temp_dir("twomanagers");
     seed_expired_token(&dir);
-    // ⚠️ refresher 를 **공유**한다 — 합쳐졌는지 보려면 합계가 필요하다.
+    // refresher 를 **공유**한다 — 합쳐졌는지 보려면 합계가 필요하다.
     let refresher = Arc::new(CountingRefresher::new("NEW"));
     let winner = Arc::new(TokenManager::new(
         dir.to_path_buf(),
@@ -1267,7 +1267,7 @@ fn an_unrepresentable_expiry_is_recorded_as_expired_not_immortal() {
     // `saturating_add` 는 여기서도 영구 토큰을 만든다. 회전은 보존하되
     // 만료 시각은 거짓말하지 않는 방향(= 이미 만료)으로 기록한다.
     //
-    // ⚠️ 이 테스트가 못박는 `expires_at == now` 는 겉보기에
+    // 이 테스트가 못박는 `expires_at == now` 는 겉보기에
     // `MAX_TOKEN_LIFETIME` 상한이 막으려는 바로 그 붕괴(= 매 호출 회전)와 같다.
     // 그런데도 여기에 회전 횟수 상한을 요구하지 않는 이유는 **이 상태가 상용에서
     // 도달 불가능**하기 때문이다: 64비트 유닉스에서 `SystemTime` 의 epoch 이후
@@ -1314,7 +1314,7 @@ fn a_failed_persist_forbids_a_second_refresh_but_still_adopts_a_good_disk_token(
     if !writes_are_denied(&dir) {
         // root 로 돌리는 중 — 저장 실패를 연출할 수 없으므로 시험할 것이 없다.
         //
-        // ⚠️ **반드시 알린다.** 조용히 return 하면 root 컨테이너 CI 에서 이
+        // **반드시 알린다.** 조용히 return 하면 root 컨테이너 CI 에서 이
         // 테스트가 통째로 no-op 이 되고 — `refresh_forbidden` 계약과 poison
         // 이후 디스크 채택을 시험하는 **유일한** 테스트다 — CI 는 초록으로
         // 남는다. store.rs 의 같은 가드와 같은 방식으로 말한다.
@@ -1485,7 +1485,7 @@ fn a_reported_lifetime_inside_the_skew_window_is_stale_on_arrival() {
     // 루프의 마지막 블록만 "두 번째 호출이 또 회전한다" → "두 번째 호출이 간격에
     // 막힌다" 로 바뀌었다. 나머지는 한 줄도 손대지 않았다.
     //
-    // ⚠️ **`max` 하한이 아니다** — A2 가 금지한 그 방향은 서버가 진심으로 말한 짧은
+    // **`max` 하한이 아니다** — A2 가 금지한 그 방향은 서버가 진심으로 말한 짧은
     // 수명을 무시하고 죽은 토큰을 실어 보낸다(근거는 `MAX_TOKEN_LIFETIME` 의 doc,
     // 그 논증은 지금도 유효하다). 이 테스트가 그 구별을 증명한다: 아래
     // `expires_at == now + expires_in` 단언이 **그대로 통과**하므로 수명 값은
@@ -1533,7 +1533,7 @@ fn a_reported_lifetime_inside_the_skew_window_is_stale_on_arrival() {
         // 인계 사항(`MAX_TOKEN_LIFETIME` doc: "안전한 해법은 … 회전 자체에
         // 최소 간격을 두거나 …")이 그대로 실행된 결과다.
         //
-        // ⚠️ 위의 `expires_at == now + expires_in` 단언이 그대로 통과한다는
+        // 위의 `expires_at == now + expires_in` 단언이 그대로 통과한다는
         //    점이 중요하다 — 금지된 `max` 하한이 아니라는 증거다. 수명 값은
         //    서버가 준 그대로이고, 억제된 것은 **회전의 빈도**뿐이다.
         //    그 단언을 지우면 이 테스트는 두 해법(안전한 간격 vs 금지된 하한)을
@@ -1616,7 +1616,7 @@ impl TokenRefresher for PanickingRefresher {
     }
 }
 
-/// 🔴 refresher 가 panic 해도 다른 호출자가 `refreshing` 깃발에 갇히지 않고, 더 회전하지 않아야 합니다.
+/// refresher 가 panic 해도 다른 호출자가 `refreshing` 깃발에 갇히지 않고, 더 회전하지 않아야 합니다.
 ///
 /// panic 한 시점에 서버가 회전을 마쳤는지 모르므로 옛 refresh 토큰으로 다시 회전하면 체인을 확정적으로
 /// 깹니다. 그래서 다음 호출은 `state_deadline` 안에 「회전 금지」 오류를 받아야 하고, 디스크의 토큰 파일은

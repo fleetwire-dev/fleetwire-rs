@@ -56,7 +56,7 @@
 //!   attached to the exact response that carried them, rather than a
 //!   `Client`-wide slot that multiple VINs or concurrent calls would
 //!   overwrite. What it does **not** guarantee: it never throttles
-//!   automatically (⚠️ whether the quota is account-shared or per-vehicle is
+//!   automatically (whether the quota is account-shared or per-vehicle is
 //!   **unmeasured** — open item O16 below — and this crate's own view of
 //!   `remaining` is incomplete under *either* reading: an account-shared
 //!   quota is also spent by other apps, a per-vehicle one by other clients
@@ -147,7 +147,7 @@
 //! outside the metered `device_data` category (see O17 below for why this
 //! stops short of "confirmed unbilled").
 //!
-//! ⚠️ **5xx responses still have no measured evidence at all** — this
+//! **5xx responses still have no measured evidence at all** — this
 //! crate's handling of them ([`error::Error::is_retryable`]'s 5xx allowlist)
 //! rests on the upstream design spec's documentation, not on a response this
 //! crate's authors have actually seen. The 408 half of this same gap closed
@@ -298,7 +298,7 @@ pub use crate::pricing::{Billing, Pricing};
 pub use crate::scope::{Scope, ScopeExpr};
 /// The URL type [`ClientBuilder::bootstrap_region`] takes.
 ///
-/// ❗ **A re-export, so callers need not depend on `url` themselves.**
+/// **A re-export, so callers need not depend on `url` themselves.**
 /// `scripts/check-wiring.sh` G1 forbids `fleetwire-capture` from depending on an
 /// HTTP crate directly (one HTTP path, not two), so this is how it names the type.
 pub use url::Url;
@@ -329,7 +329,7 @@ mod readonly_guard_tests {
     /// `active_content`, so this test fails even when an individual entry is commented out
     /// with `#` or the whole `disallowed-methods = [...]` block is commented out (discipline
     /// article 1: a rule that forbids X needs an input that fails only when X is done).
-    /// ⚠️ This test cannot prove that clippy actually applies those rules — that is the job
+    /// This test cannot prove that clippy actually applies those rules — that is the job
     /// of the `cargo clippy -D warnings` gate. What is blocked here is the regression where
     /// "someone deletes or comments out an entry in the list".
     #[test]

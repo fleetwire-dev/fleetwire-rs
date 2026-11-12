@@ -2,7 +2,7 @@
 resolver = "3"
 members = ["crates/fleetwire", "crates/fleetwire-testkit"]
 
-# 두 크레이트가 공유하는 의존성의 버전을 한 곳에서 잠급니다(버전 어긋남 방지).
+# Versions of the dependencies both crates share, pinned in one place.
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -15,14 +15,14 @@ repository = "https://github.com/fleetwire-dev/fleetwire-rs"
 homepage = "https://github.com/fleetwire-dev/fleetwire-rs"
 authors = ["Jeong Seung Hwan <4435353+draken1@users.noreply.github.com>"]
 
-# 읽기 전용 불변식: 어떤 크레이트도 unsafe 를 쓰지 않습니다.
+# No crate in this workspace uses unsafe code.
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
-# 린트를 켜야 clippy.toml 이 효력을 갖습니다.
+# clippy.toml only takes effect with this lint enabled.
 [workspace.lints.clippy]
 disallowed_methods = "deny"
-# 제품 코드의 패닉 문턱입니다. 시험 코드는 clippy.toml 의 allow-*-in-tests 로 허용합니다.
+# Product code must not panic. Tests are exempt through allow-*-in-tests in clippy.toml.
 unwrap_used = "deny"
 panic = "deny"
 unchecked_time_subtraction = "deny"

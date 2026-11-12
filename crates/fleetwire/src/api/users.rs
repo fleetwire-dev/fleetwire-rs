@@ -8,7 +8,7 @@ use crate::scope::{Scope, ScopeExpr};
 
 /// `GET /api/1/users/region` — this account's Fleet API region and base URL.
 ///
-/// ⚠️ The response's `fleet_api_base_url` is a **server-supplied string**,
+/// The response's `fleet_api_base_url` is a **server-supplied string**,
 /// and Bearer tokens are sent to whatever URL a caller adopts it as. Using it
 /// without validation is a credential-exfiltration path — [`crate::Client`]
 /// adopts it only after a fixed host allowlist
@@ -55,7 +55,7 @@ pub struct RegionInfo {
     pub region: Option<String>,
     /// The Fleet API base URL this account should use.
     ///
-    /// ⚠️ Server-supplied — see this module's [`GetRegion`] doc before using
+    /// Server-supplied — see this module's [`GetRegion`] doc before using
     /// it as an HTTP destination for an authenticated request.
     #[serde(default)]
     pub fleet_api_base_url: Option<String>,
@@ -63,9 +63,9 @@ pub struct RegionInfo {
 
 /// `GET /api/1/users/me` — the current user's profile.
 ///
-/// ⚠️ **Requires a user-context token** — a 3rd-party business token is not
+/// **Requires a user-context token** — a 3rd-party business token is not
 /// compatible (O1 common note).
-/// ⚠️ The response is `serde_json::Value` — the live shape has not been
+/// The response is `serde_json::Value` — the live shape has not been
 /// observed, and guessing field names into a strongly-typed public API would
 /// be dishonest.
 pub struct GetMe;
@@ -75,7 +75,7 @@ impl crate::sealed::Sealed for GetMe {}
 impl FleetGet for GetMe {
     passthrough_endpoint!(GetMe, serde_json::Value);
 
-    /// ⚠️ `user_data`, not `openid` (O1 correction no. 4) — unlike [`GetRegion`],
+    /// `user_data`, not `openid` (O1 correction no. 4) — unlike [`GetRegion`],
     /// which accepts several scopes, this endpoint requires exactly this
     /// one.
     fn required_scopes(&self) -> ScopeExpr {
@@ -94,11 +94,11 @@ impl FleetGet for GetMe {
 
 /// `GET /api/1/users/orders` — this account's order history.
 ///
-/// ⚠️ **Requires a user-context token** — a 3rd-party business token is not
+/// **Requires a user-context token** — a 3rd-party business token is not
 /// compatible (O1 common note).
-/// ⚠️ The response is `serde_json::Value` — the live shape has not been
+/// The response is `serde_json::Value` — the live shape has not been
 /// observed.
-/// ⚠️ Named like a collection but **not paginated** — O1's evidence matrix
+/// Named like a collection but **not paginated** — O1's evidence matrix
 /// found no `pagination` sibling on this endpoint, so it is checked, not
 /// assumed. If a live response is ever found to carry one, adding
 /// [`crate::model::Page`] here is a breaking change and must be verified
@@ -110,7 +110,7 @@ impl crate::sealed::Sealed for ListOrders {}
 impl FleetGet for ListOrders {
     passthrough_endpoint!(ListOrders, serde_json::Value);
 
-    /// ⚠️ **`vehicle_device_data`, not `user_data`** — and the two halves of
+    /// **`vehicle_device_data`, not `user_data`** — and the two halves of
     /// that sentence have very different evidence behind them. A5 Task 1's
     /// scope contrast experiment (O20).
     ///
@@ -151,9 +151,9 @@ impl FleetGet for ListOrders {
 
 /// `GET /api/1/users/feature_config` — this account's feature flags.
 ///
-/// ⚠️ **Requires a user-context token** — a 3rd-party business token is not
+/// **Requires a user-context token** — a 3rd-party business token is not
 /// compatible (O1 common note).
-/// ⚠️ The response is `serde_json::Value` — the live shape has not been
+/// The response is `serde_json::Value` — the live shape has not been
 /// observed.
 pub struct GetFeatureConfig;
 
@@ -162,7 +162,7 @@ impl crate::sealed::Sealed for GetFeatureConfig {}
 impl FleetGet for GetFeatureConfig {
     passthrough_endpoint!(GetFeatureConfig, serde_json::Value);
 
-    /// ⚠️ `user_data`, not `openid` (O1 correction no. 4).
+    /// `user_data`, not `openid` (O1 correction no. 4).
     fn required_scopes(&self) -> ScopeExpr {
         ScopeExpr::One(Scope::UserData)
     }

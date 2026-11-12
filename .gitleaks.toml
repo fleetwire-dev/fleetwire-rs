@@ -1,8 +1,9 @@
-# gitleaks 설정입니다. 기본 규칙을 그대로 쓰고, 시험이 일부러 넣은 값만 이유와 함께 허용합니다.
+# gitleaks configuration. The default rules apply; only values the tests plant on purpose are allowed,
+# each with its reason.
 [extend]
 useDefault = true
 
-# 가림(redaction) 시험이 「비밀처럼 생긴 값」으로 쓰는 가짜 문자열입니다.
+# Fake secret-shaped strings the redaction tests use as input.
 [[allowlists]]
 description = "fake secret-shaped strings used by redaction tests"
 regexTarget = "line"

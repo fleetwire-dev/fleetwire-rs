@@ -75,7 +75,7 @@ pub enum Error {
         /// Tesla's transaction id for this response (body `txid` → header
         /// `x-txid`). Hand this to Tesla support when filing a case (A4).
         ///
-        /// ⚠️ **Not redacted.** Account UUIDs are masked because they can
+        /// **Not redacted.** Account UUIDs are masked because they can
         /// identify a person; a transaction id must survive verbatim or the
         /// value is useless for a support case (same reasoning as A3 T7's
         /// decision to preserve `x-request-id`). It is a correlation
@@ -94,7 +94,7 @@ pub enum Error {
     VehicleOffline {
         /// The pricing category of the endpoint that was called.
         pricing: Pricing,
-        /// Same contract as [`Error::Api::txid`] (A4). ⚠️ **Must be carried
+        /// Same contract as [`Error::Api::txid`] (A4). **Must be carried
         /// here too, not only on [`Error::Api`]** — the live-measured 408
         /// this field exists for classifies as `VehicleOffline`, not `Api`;
         /// putting `txid` on `Api` alone would lose it on exactly the
@@ -106,7 +106,7 @@ pub enum Error {
     /// The held OAuth scopes do not satisfy the endpoint's scope
     /// requirement. Detected client-side before any request is sent.
     ///
-    /// ⚠️ This value is derived from scopes **observed on an unverified
+    /// This value is derived from scopes **observed on an unverified
     /// token** — the access token's signature is never checked to produce
     /// it, and nothing guarantees a Tesla access token is even a JWT. This
     /// is an **advisory cost guard that avoids paying for a call the server
@@ -116,7 +116,7 @@ pub enum Error {
     /// [`Error::billing`]'s note on why a 403 is deliberately never folded
     /// into this variant (design §10).
     ///
-    /// ⚠️ **There is deliberately no `held` field** (final fix wave, Minor
+    /// **There is deliberately no `held` field** (final fix wave, Minor
     /// 3). The pre-check that raises this is a *verdict, not a diagnostic*
     /// (REQ-18): it never carries the observed claims out, so the only value
     /// the single construction site could supply was an empty vector, and
@@ -212,7 +212,7 @@ impl Error {
     /// retryable, to avoid duplicate billing or hammering a server that may
     /// already have processed the request.
     ///
-    /// ⚠️ This judgment is stricter than it has to be — on the 14 unbilled
+    /// This judgment is stricter than it has to be — on the 14 unbilled
     /// endpoints, retrying [`Error::TransportUnknown`] would not cause
     /// duplicate billing (rate limiting still applies). It judges by status
     /// alone anyway, for three reasons: retry defaults to off, so there is
@@ -351,7 +351,7 @@ mod tests {
             message: String::new(),
             pricing: Pricing::NotCharged,
         };
-        // ⚠️ not `Billing::Unknown` — that is the *paid* answer for this
+        // not `Billing::Unknown` — that is the *paid* answer for this
         // variant (`transport_unknown_paid_is_unknown_not_retryable`).
         assert_eq!(unknown.billing(), Billing::NotBilled);
         assert_ne!(unknown.billing(), Billing::Unknown);

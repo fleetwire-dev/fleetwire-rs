@@ -87,7 +87,7 @@ impl ScopeExpr {
     /// `held` does not satisfy it, or `None` when it does — for advisory
     /// pre-checks.
     ///
-    /// ⚠️ Whatever `held` a caller passes here is only as trustworthy as its
+    /// Whatever `held` a caller passes here is only as trustworthy as its
     /// source. `crate::client::Client::send`'s own pre-check (A3 Task 9,
     /// design §10) never actually holds a `held: &[Scope]` to call this
     /// with — it goes through `crate::auth`'s unverified, signature-free

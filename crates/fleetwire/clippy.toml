@@ -1,36 +1,38 @@
-# fleetwire 는 GET 전용 읽기 라이브러리입니다(REQ-19 / design §3). 토큰 갱신 POST 한 곳(`auth/refresh.rs`)만 `allow` 합니다.
-# 보조 방어선입니다 — 본진은 공개 API 에 쓰기 경로가 없다는 것과 게이트 G2·G28 입니다.
-# 이 파일은 fleetwire 크레이트에만 적용됩니다(워크스페이스 전체에 두면 발송기·명령기의 정당한 POST 까지 막습니다).
-# 목록은 ureq 3.3.0 의 agent.rs·lib.rs·config.rs·request_ext.rs 를 전수로 훑어 만들었습니다(최종 검토 M-2).
-# ureq 를 올리면 같은 파일들에 새 메서드·Agent 생성 경로가 생겼는지 다시 봅니다.
-# 시험 코드에서는 unwrap·panic! 을 허용합니다(워크스페이스 린트 unwrap_used·panic 은 제품 코드에만 걸립니다).
+# fleetwire is a GET-only read library. The single POST it makes — the token refresh in
+# `auth/refresh.rs` — carries an explicit `allow`.
+# This list is a backstop. The primary defence is that the public API has no write path (the endpoint
+# trait is sealed) and that every modelled endpoint issues a GET.
+# It applies to the fleetwire crate only.
+# The entries were collected by reading ureq 3.3.0's agent.rs, lib.rs, config.rs and request_ext.rs in
+# full. When ureq is upgraded, re-read those files for new methods or new ways to build an `Agent`.
+# Test code may use unwrap and panic! (the `unwrap_used` and `panic` lints bind product code only).
 allow-unwrap-in-tests = true
 allow-panic-in-tests = true
 
 disallowed-methods = [
-  { path = "ureq::Agent::post",    reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::put",     reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::patch",   reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::delete",  reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::head",    reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::options", reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::connect", reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::trace",   reason = "fleetwire 는 GET 전용입니다" },
-  { path = "ureq::Agent::run",     reason = "메서드 임의 지정 우회를 막습니다" },
-  { path = "ureq::run",            reason = "메서드 임의 지정 우회를 막습니다" },
-  { path = "ureq::get",            reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::post",           reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::put",            reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::patch",          reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::delete",         reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::head",           reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::options",        reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::connect",        reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::trace",          reason = "Agent 설정(리다이렉트·프록시)을 우회합니다" },
-  { path = "ureq::agent",                       reason = "Agent 는 net::agent 에서만 만듭니다" },
-  { path = "ureq::Agent::new_with_defaults",    reason = "Agent 는 net::agent 에서만 만듭니다" },
-  { path = "ureq::Agent::new_with_config",      reason = "Agent 는 net::agent 에서만 만듭니다" },
-  { path = "ureq::config::Config::new_agent",   reason = "Agent 는 net::agent 에서만 만듭니다" },
-  { path = "ureq::RequestExt::with_agent",         reason = "http::Request 로 메서드를 임의 지정하는 우회를 막습니다" },
-  { path = "ureq::RequestExt::with_default_agent", reason = "http::Request 로 메서드를 임의 지정하는 우회를 막습니다" },
+  { path = "ureq::Agent::post",    reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::put",     reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::patch",   reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::delete",  reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::head",    reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::options", reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::connect", reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::trace",   reason = "fleetwire is GET-only" },
+  { path = "ureq::Agent::run",     reason = "it lets the caller pick an arbitrary HTTP method" },
+  { path = "ureq::run",            reason = "it lets the caller pick an arbitrary HTTP method" },
+  { path = "ureq::get",            reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::post",           reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::put",            reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::patch",          reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::delete",         reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::head",           reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::options",        reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::connect",        reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::trace",          reason = "it bypasses the Agent configuration (redirects, proxy)" },
+  { path = "ureq::agent",                       reason = "build the Agent only in net::agent" },
+  { path = "ureq::Agent::new_with_defaults",    reason = "build the Agent only in net::agent" },
+  { path = "ureq::Agent::new_with_config",      reason = "build the Agent only in net::agent" },
+  { path = "ureq::config::Config::new_agent",   reason = "build the Agent only in net::agent" },
+  { path = "ureq::RequestExt::with_agent",         reason = "it lets an http::Request carry an arbitrary HTTP method" },
+  { path = "ureq::RequestExt::with_default_agent", reason = "it lets an http::Request carry an arbitrary HTTP method" },
 ]

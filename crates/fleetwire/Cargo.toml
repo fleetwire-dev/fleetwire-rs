@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/fleetwire"
 keywords = ["tesla", "fleet", "api", "http-client", "vehicle"]
 categories = ["api-bindings", "web-programming::http-client"]
-# shell 가드: A 읽기 라이브러리 완성·publish 준비 시 제거.
+# Guard: remove when the crate is ready to publish.
 publish = false
 
 [lints]
@@ -23,20 +23,20 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 http = "1"
-# 동기 HTTPS 백엔드입니다(rustls·ring·webpki-roots). 설정은 `src/net.rs::agent` 한 곳에 있습니다.
+# The synchronous HTTPS backend (rustls, ring, webpki-roots). It is configured in one place: `src/net.rs::agent`.
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 percent-encoding = "2"
 regex = "1"
 base64 = { version = "0.23", default-features = false, features = ["std"] }
 
-# 공개 `fleetwire::Url` 의 실체입니다(호스트 판정·경로 조립). lock 에 이미 있는 2.5 를 씁니다.
+# The type behind the public `fleetwire::Url` (host checks, path assembly).
 url = "2"
 
-# Retry-After 의 HTTP-date 형식 파싱(RFC 9110). stdlib 에 날짜 파서가 없다.
+# Parses the HTTP-date form of Retry-After (RFC 9110); std has no date parser.
 httpdate = "1"
 
 [dev-dependencies]
-# 시험용 HTTP 모의 서버입니다(std, dev 전용이라 소비자 트리에 들어가지 않습니다).
+# The mock HTTP server the tests use (std only; a dev-dependency, so it never enters a consumer's tree).
 fleetwire-testkit = { path = "../fleetwire-testkit" }
 
 [package.metadata.docs.rs]

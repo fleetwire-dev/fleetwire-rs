@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# .github/rulesets/*.json 을 저장소 규칙 묶음으로 올립니다. 같은 이름이 있으면 고치고 없으면 만듭니다.
-# 사용: scripts/apply-rulesets.sh <owner/repo> [--dry-run]
-# 규칙 묶음은 공개 저장소(또는 유료 요금제)에서만 걸립니다. 관리자 권한의 gh 로그인이 필요합니다.
+# Applies .github/rulesets/*.json as repository rulesets: updates one with the same name, creates it otherwise.
+# Usage: scripts/apply-rulesets.sh <owner/repo> [--dry-run]
+# Rulesets only bind on public repositories (or paid plans). Needs a gh login with admin rights.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=${1:?usage: apply-rulesets.sh <owner/repo> [--dry-run]}
