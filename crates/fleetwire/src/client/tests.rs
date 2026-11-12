@@ -2054,7 +2054,7 @@ fn account_uuid_is_redacted() {
         .respond_with(ResponseTemplate::new(412)
             .insert_header("x-request-id", "0aea2788-ca44-4391-95a3-774e13da5b5d")
             .set_body_raw(
-                br#"{"error":"Account 801802ed-225d-4b13-acf6-f69fc59b2ef0 must be registered in the current region"}"#.to_vec(),
+                br#"{"error":"Account 00000000-1111-4222-8333-444444444444 must be registered in the current region"}"#.to_vec(),
                 "application/json"))
         .mount(&server);
 
@@ -2062,7 +2062,7 @@ fn account_uuid_is_redacted() {
     let e = c.send(&GetRegion).unwrap_err();
     let rendered = format!("{e}{e:?}");
     assert!(
-        !rendered.contains("801802ed-225d-4b13-acf6-f69fc59b2ef0"),
+        !rendered.contains("00000000-1111-4222-8333-444444444444"),
         "🔴 계정 UUID 가 노출됐다: {rendered}"
     );
     assert!(

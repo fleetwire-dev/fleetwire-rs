@@ -351,7 +351,7 @@ fn text_patterns() -> &'static TextPatterns {
         .expect("static regex"),
         // A3 Task 7 (design §8): the **account UUID** Tesla puts in a 412
         // body. Measured 2026-08-01: a request sent to the wrong region is
-        // answered with `Account 801802ed-…-f69fc59b2ef0 must be registered
+        // answered with `Account 00000000-…-444444444444 must be registered
         // in the current region`, i.e. the account identifier in the clear.
         // OSS users paste error messages into GitHub issues verbatim.
         //
@@ -533,7 +533,7 @@ fn redact_text(s: &str) -> String {
 ///
 /// Evidence (measured 2026-08-01): a request sent to the wrong region is
 /// answered with a 412 whose body reads
-/// `Account 801802ed-…-f69fc59b2ef0 must be registered in the current region`
+/// `Account 00000000-…-444444444444 must be registered in the current region`
 /// — the account identifier in the clear. OSS users paste error messages
 /// into GitHub issues verbatim (design §8), so it is stripped here.
 ///
@@ -635,11 +635,11 @@ mod tests {
     /// written to avoid.
     #[test]
     fn redacts_account_uuid_but_keeps_bare_uuid() {
-        let s = "Account 801802ed-225d-4b13-acf6-f69fc59b2ef0 must be registered; \
+        let s = "Account 00000000-1111-4222-8333-444444444444 must be registered; \
                  request 0aea2788-ca44-4391-95a3-774e13da5b5d";
         let out = redact_account_id(s);
         assert!(
-            !out.contains("801802ed-225d-4b13-acf6-f69fc59b2ef0"),
+            !out.contains("00000000-1111-4222-8333-444444444444"),
             "계정 ID 가 남았다: {out}"
         );
         assert!(
@@ -655,10 +655,10 @@ mod tests {
     /// every real error message leaked the account id again.
     #[test]
     fn body_preview_masks_account_uuid_in_a_real_412_body() {
-        let raw = r#"{"error":"Account 801802ed-225d-4b13-acf6-f69fc59b2ef0 must be registered in the current region"}"#;
+        let raw = r#"{"error":"Account 00000000-1111-4222-8333-444444444444 must be registered in the current region"}"#;
         let out = body_preview(raw, 512);
         assert!(
-            !out.contains("801802ed-225d-4b13-acf6-f69fc59b2ef0"),
+            !out.contains("00000000-1111-4222-8333-444444444444"),
             "{out}"
         );
         assert!(out.contains("[REDACTED]"), "{out}");
@@ -669,7 +669,7 @@ mod tests {
     /// own output.
     #[test]
     fn account_id_redaction_is_idempotent() {
-        let once = redact_account_id("Account 801802ed-225d-4b13-acf6-f69fc59b2ef0 x");
+        let once = redact_account_id("Account 00000000-1111-4222-8333-444444444444 x");
         assert_eq!(redact_account_id(&once), once);
     }
 
