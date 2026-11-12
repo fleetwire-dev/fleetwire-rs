@@ -13,12 +13,25 @@
 //! The VIN is printed masked; pass `--show-vin` to print it in full.
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use fleetwire::api::vehicles::ListVehicles;
 use fleetwire::{Client, HttpRefresher, TokenManager};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            // Print the error's message, not its `Debug` form, and point at the README.
+            eprintln!("error: {e}");
+            eprintln!("See \"If it fails\" in the fleetwire README for the usual causes.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let client_id = std::env::var("TESLA_CLIENT_ID")
         .map_err(|_| "set TESLA_CLIENT_ID to your Tesla developer app's client id")?;
     let dir = std::env::var_os("FLEETWIRE_TOKEN_DIR")

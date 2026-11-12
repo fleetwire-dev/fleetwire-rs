@@ -16,25 +16,46 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
 
 ## Quick start
 
-You need a Tesla developer app (its **client id**) and a **refresh token** for your account. Tesla's
-[Fleet API docs](https://developer.tesla.com/docs/fleet-api) cover app registration and the
-authorization-code flow that yields the refresh token.
+**Before you start** you need two things from Tesla, and this crate does not obtain them for you:
 
-1. Put the refresh token where only you can read it:
+- a Tesla developer app — its **client id**;
+- a **refresh token** for your account, issued to that app with the scopes `openid`, `offline_access`
+  and `vehicle_device_data`.
+
+Tesla's [Fleet API docs](https://developer.tesla.com/docs/fleet-api) cover app registration and the
+authorization-code flow that yields the refresh token. fleetwire takes over from there: it refreshes
+access tokens, but it does not run the authorization-code exchange. Expect this part to take longer than
+everything below.
+
+The crate builds on Linux and macOS (CI runs on Linux).
+
+1. Get the code. The example lives in the repository, so clone it; the commands below work from
+   anywhere inside the clone.
 
    ```sh
-   mkdir -m 700 ~/.fleetwire
+   git clone https://github.com/fleetwire-dev/fleetwire-rs
+   cd fleetwire-rs
+   ```
+
+2. Put the refresh token where only you can read it:
+
+   ```sh
+   mkdir -p ~/.fleetwire && chmod 700 ~/.fleetwire
    (umask 077 && cat > ~/.fleetwire/tokens.json <<'EOF'
    {"access_token": "", "refresh_token": "PASTE_YOUR_REFRESH_TOKEN", "expires_at": 0}
    EOF
    )
    ```
 
-   `expires_at: 0` makes the first call refresh the access token. fleetwire rewrites this file each time
-   Tesla rotates the refresh token, so after this step you never edit it by hand. The directory must not
-   be accessible to other users, or the client refuses to read it.
+   - `expires_at` is a Unix time in seconds; `0` means "already expired", so the first call refreshes
+     the access token and fills in `access_token`.
+   - ⚠️ Do this **once**. fleetwire rewrites this file every time Tesla rotates the refresh token, and
+     the newest refresh token exists only there. Running the command again over a working directory
+     overwrites it with the old token you pasted.
+   - The directory must not be accessible to other users, or the client refuses to read it.
+   - A `tokens.lock` file appears next to it. It is the cross-process lock; leave it.
 
-2. List your vehicles. This call is free and does not wake the car:
+3. List your vehicles. This call is free and does not wake the car:
 
    ```sh
    TESLA_CLIENT_ID=your-client-id FLEETWIRE_TOKEN_DIR=$HOME/.fleetwire \
@@ -46,7 +67,22 @@ authorization-code flow that yields the refresh token.
    - vin LRW**********1234 · state asleep
    ```
 
-3. Use it from your code:
+   The example masks the VIN; add `-- --show-vin` to print it in full. `TESLA_CLIENT_ID` and
+   `FLEETWIRE_TOKEN_DIR` are read by the example only — the library takes both as arguments.
+
+### If it fails
+
+| You see | Usual cause |
+|---|---|
+| `set TESLA_CLIENT_ID …` / `set FLEETWIRE_TOKEN_DIR …` | The environment variable is missing. |
+| `token refresh failed: HTTP 400 … client_not_found` | The client id is wrong, or belongs to another app. |
+| Any other `token refresh failed: HTTP 4xx …` | The refresh token is mistyped, expired, already rotated, or was issued to a different client id. Tesla's own message follows the status. |
+| `token directory permissions are too permissive` | The directory or `tokens.json` is readable by others: `chmod 700 ~/.fleetwire && chmod 600 ~/.fleetwire/tokens.json`. |
+| `token file not found` | `FLEETWIRE_TOKEN_DIR` points at a directory without `tokens.json` (step 2). |
+| A scope error before any request is sent | The token lacks `vehicle_device_data`; re-authorize the app with that scope. |
+
+4. Use it from your code. Add the dependency (`cargo add fleetwire`, once published — until then, a
+   `path` or `git` dependency on this repository), then:
 
    ```rust,no_run
    use std::sync::Arc;

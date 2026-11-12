@@ -15,11 +15,15 @@ The crate lives in [`crates/fleetwire`](crates/fleetwire) — start with its
 
 ## Development
 
+Builds on Linux and macOS. `rust-toolchain.toml` pins the toolchain used for development (rustup installs
+it on first use); the minimum supported Rust version is 1.89.0.
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 cargo test --workspace --doc --all-features --locked
+cargo +1.89.0 test --workspace --all-targets --all-features --locked   # MSRV
 ```
 
 Code comments are written in Korean; the public documentation of `fleetwire` is in English.
