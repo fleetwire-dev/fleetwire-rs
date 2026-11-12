@@ -355,7 +355,7 @@ fn text_patterns() -> &'static TextPatterns {
         // in the current region`, i.e. the account identifier in the clear.
         // OSS users paste error messages into GitHub issues verbatim.
         //
-        // ⚠️ Deliberately **not** a global UUID substitution. A bare
+        // Deliberately **not** a global UUID substitution. A bare
         // `[0-9a-f]{8}-…` pattern would also erase `x-request-id` and every
         // other diagnostic correlation id, which is what an operator needs
         // to hand Tesla support. Anchored on the literal `Account ` context
@@ -537,7 +537,7 @@ fn redact_text(s: &str) -> String {
 /// — the account identifier in the clear. OSS users paste error messages
 /// into GitHub issues verbatim (design §8), so it is stripped here.
 ///
-/// ⚠️ **UUIDs are not substituted globally.** That would also erase
+/// **UUIDs are not substituted globally.** That would also erase
 /// diagnostic identifiers such as `x-request-id`, which is exactly what an
 /// operator needs to hand Tesla support. The match is anchored on the
 /// `Account <uuid>` context; what is *kept* is as much this function's

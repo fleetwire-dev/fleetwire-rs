@@ -49,7 +49,7 @@ The crate builds on Linux and macOS (CI runs on Linux).
 
    - `expires_at` is a Unix time in seconds; `0` means "already expired", so the first call refreshes
      the access token and fills in `access_token`.
-   - ⚠️ Do this **once**. fleetwire rewrites this file every time Tesla rotates the refresh token, and
+   - Do this **once**. fleetwire rewrites this file every time Tesla rotates the refresh token, and
      the newest refresh token exists only there. Running the command again over a working directory
      overwrites it with the old token you pasted.
    - The directory must not be accessible to other users, or the client refuses to read it.
@@ -112,7 +112,7 @@ The other fourteen are not.
 | `Client::send` | The typed response. |
 | `Client::send_guarded` | Checks the car's state with a free call first and only makes the billed call when it is online; otherwise reports `Guarded::Skipped` and spends nothing. |
 | `Client::send_metered` | The typed response plus the `ratelimit-*` quota the billed endpoints report. |
-| `Client::send_raw` | ⚠️ The response body **verbatim and unscrubbed** (VIN, coordinates, odometer) as one `serde_json::Value`, for observing schema drift. Treat it as personal data. |
+| `Client::send_raw` | The response body **verbatim and unscrubbed** (VIN, coordinates, odometer) as one `serde_json::Value`, for observing schema drift. Treat it as personal data. |
 
 `max_attempts` defaults to `1`, and the 401/412 recovery paths never re-send a request to a billed
 endpoint. `send_guarded` narrows the window but cannot close it: the car can fall asleep between the free

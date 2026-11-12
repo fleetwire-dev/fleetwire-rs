@@ -166,7 +166,7 @@ pub(crate) fn decode_with_txid_header<T: serde::de::DeserializeOwned>(
 /// all**, after the exact same status and content-type gates
 /// [`decode_with_txid_header`] applies.
 ///
-/// ❗❗ **The whole body, not the envelope's `response` member.**
+/// **The whole body, not the envelope's `response` member.**
 /// [`decode_with_txid_header`] parses `Envelope<T>` and hands back
 /// `envelope.response` plus `pagination`; [`crate::model::Envelope`] carries no
 /// `deny_unknown_fields`, so **any other top-level sibling Tesla sends is
@@ -175,13 +175,13 @@ pub(crate) fn decode_with_txid_header<T: serde::de::DeserializeOwned>(
 /// exists to *see* new fields, so it must not go through a struct that
 /// silently eats them.
 ///
-/// ⚠️ **The gates are shared, not re-implemented.** Everything
+/// **The gates are shared, not re-implemented.** Everything
 /// [`decode_with_txid_header`] refuses — `>= 400` (including the 401/408
 /// classification), a non-JSON content-type — this refuses identically,
 /// because both call [`gate`]. A second copy of that logic is exactly the
 /// three-verbatim-copies mistake A5c-2a T19 spent a fix round undoing.
 ///
-/// ⚠️ **No schema check whatsoever.** Any syntactically valid JSON document is
+/// **No schema check whatsoever.** Any syntactically valid JSON document is
 /// accepted, whatever shape it has. Deciding whether the body is plausible for
 /// the endpoint that was called is the caller's problem.
 pub(crate) fn decode_body_raw(
@@ -208,7 +208,7 @@ pub(crate) fn decode_body_raw(
 
 /// Turns a `serde_json` failure over the response body into [`Error::Decode`].
 ///
-/// ❗ Shared by [`decode_with_txid_header`] and [`decode_body_raw`] so the
+/// Shared by [`decode_with_txid_header`] and [`decode_body_raw`] so the
 /// redaction rule below cannot hold in one and not the other.
 fn body_parse_error(
     err: &serde_json::Error,
@@ -256,7 +256,7 @@ fn body_parse_error(
 
 /// The status and content-type gates every decode path shares.
 ///
-/// ❗❗ **This is the single place that decides a response is an error rather
+/// **This is the single place that decides a response is an error rather
 /// than a payload.** Both [`decode_with_txid_header`] and [`decode_body_raw`]
 /// call it before they look at the body, so a 4xx/5xx can never be handed back
 /// as a successfully decoded value by either — including
@@ -353,7 +353,7 @@ fn gate(
 
 /// Passes through only a string that has non-whitespace content.
 ///
-/// ⚠️ A4 Task 3: the live-measured 408 gives `"error_description": ""` — the
+/// A4 Task 3: the live-measured 408 gives `"error_description": ""` — the
 /// key is present, but an empty value must never win a fallback chain just
 /// because the key exists. Every step of [`error_message`] and **both**
 /// branches of [`extract_txid`] (body `txid` and the header fallback) are
@@ -368,16 +368,16 @@ fn non_empty(s: Option<&str>) -> Option<&str> {
 /// `error_description` in `WWW-Authenticate` → `canonical_reason()`. Each step is conditional
 /// on the value being **non-empty** (A4 Task 3).
 ///
-/// ⚠️ Why step 2 (now step 3) is needed (measured 2026-08-01): a 401 answered by the Doorkeeper
+/// Why step 2 (now step 3) is needed (measured 2026-08-01): a 401 answered by the Doorkeeper
 /// upstream has a **0-byte** body and carries `error_description` only in the header. A parser
 /// that reads only the body gets nothing in that case.
 ///
-/// ⚠️ A4 Task 3 measurement (2026-08-03): a 408 gives `"error_description":""` — the body
+/// A4 Task 3 measurement (2026-08-03): a 408 gives `"error_description":""` — the body
 /// `error_description` can **exist as an empty string too**, so that empty value must not
 /// become the final message just because the key is present. Every step is gated through
 /// `non_empty`.
 ///
-/// ⚠️ This value is **not used for classification** — the wording is an implementation detail
+/// This value is **not used for classification** — the wording is an implementation detail
 /// that, even for the same 401, splits into `invalid authentication` / `invalid bearer token`
 /// depending on the upstream. Classification is done by status alone (design §7).
 fn error_message(body: &[u8], www_authenticate: Option<&str>, status: http::StatusCode) -> String {
@@ -403,11 +403,11 @@ fn error_message(body: &[u8], www_authenticate: Option<&str>, status: http::Stat
 }
 
 /// Extracts Tesla's transaction id: body `txid` first, then the header
-/// `x-txid` (A4 Task 3). ⚠️ The result is **never** run through
+/// `x-txid` (A4 Task 3). The result is **never** run through
 /// [`body_preview`]/redaction at the call site — see [`crate::error::Error`]'s
 /// `txid` field doc for why a transaction id must survive verbatim.
 ///
-/// ⚠️ Final fix wave item 1: both branches are gated through [`non_empty`] —
+/// Final fix wave item 1: both branches are gated through [`non_empty`] —
 /// a body `txid` of `""` must fall through to the header, exactly like the
 /// live-measured 408's empty `error_description` must fall through in
 /// [`error_message`]. Without the gate, `Some("")` from the body would win
@@ -1219,7 +1219,7 @@ mod tests {
         assert!(!e.to_string().contains("header loses"), "실제: {e}");
     }
 
-    /// ⚠️ 401 + text/html + 0 bytes does not leak out as Decode (this prevents billing
+    /// 401 + text/html + 0 bytes does not leak out as Decode (this prevents billing
     /// misclassification). Pins the contract that the status check comes before the
     /// content-type check.
     #[test]
@@ -1287,7 +1287,7 @@ mod tests {
 
     // --- A4 Task 3: empty error_description skipped + txid preserved -------
 
-    /// ⚠️ An empty error_description must not win as the message (the measured 408 gives "").
+    /// An empty error_description must not win as the message (the measured 408 gives "").
     /// In this fixture error is empty too, so the fallback chain **actually runs** —
     /// with `FIXTURE_408_OFFLINE` alone, error wins as first priority and the test is
     /// vacuous.
@@ -1322,7 +1322,7 @@ mod tests {
     }
 
     /// The txid of a 408 is carried on VehicleOffline.
-    /// ⚠️ If it were carried only on Error::Api, the txid would be lost in **the very
+    /// If it were carried only on Error::Api, the txid would be lost in **the very
     /// response we measured**.
     #[test]
     fn txid_survives_on_vehicle_offline() {
@@ -1424,7 +1424,7 @@ mod tests {
     /// rewrites to `[VIN]` everywhere else in this crate, so a redaction leak
     /// on this field is unmissable.
     ///
-    /// ⚠️ **Scope, corrected in fix round 1**: status 500 here reaches only
+    /// **Scope, corrected in fix round 1**: status 500 here reaches only
     /// the `Error::Api` arm of `decode`'s `>= 400` match. It says nothing
     /// about the `Error::VehicleOffline` (408) arm, which is a *separate*
     /// construction site with its own `txid` wiring. Round 1 review found
@@ -1519,7 +1519,7 @@ mod tests {
         );
     }
 
-    /// ⚠️ The txid is not redacted — it is needed for Tesla support inquiries.
+    /// The txid is not redacted — it is needed for Tesla support inquiries.
     #[test]
     fn txid_is_not_redacted() {
         let e = decode::<serde_json::Value>(

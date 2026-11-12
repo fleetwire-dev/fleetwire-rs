@@ -1,5 +1,5 @@
 name: scorecard
-# OpenSSF Scorecard 로 저장소의 공급망 보안 상태를 바깥에서 채점합니다(공개 저장소에서만 뜻이 있습니다).
+# Scores the repository's supply-chain posture with OpenSSF Scorecard.
 on:
   branch_protection_rule:
   schedule:
@@ -13,7 +13,7 @@ permissions: read-all
 jobs:
   analysis:
     runs-on: ubuntu-latest
-    # 비공개 저장소에서는 돌리지 않습니다(결과를 공개 서비스에 올리는 작업입니다).
+    # Skipped on private repositories: the job publishes its results to a public service.
     if: github.event.repository.visibility == 'public'
     permissions:
       security-events: write

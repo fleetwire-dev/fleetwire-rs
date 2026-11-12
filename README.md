@@ -26,8 +26,9 @@ cargo test --workspace --doc --all-features --locked
 cargo +1.89.0 test --workspace --all-targets --all-features --locked   # MSRV
 ```
 
-Code comments are written in Korean; the public documentation of `fleetwire` is in English.
-Security reports: see [SECURITY.md](SECURITY.md).
+Public documentation is in English; many internal comments are in Korean. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for what fits the project, and [SECURITY.md](SECURITY.md) to report a
+vulnerability.
 
 ## License
 

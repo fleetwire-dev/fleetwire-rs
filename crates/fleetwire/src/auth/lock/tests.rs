@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 /// 드롭될 때 디렉터리째 지운다.
 ///
 /// `Deref<Target = Path>` 는 **락 파일 경로**를 준다 — `&path`·`path.exists()` 같은
-/// 기존 호출부가 그대로 컴파일된다. ❗ 즉시 버리지 말 것
+/// 기존 호출부가 그대로 컴파일된다. 즉시 버리지 말 것
 /// (`temp_lock_path("x").parent()` 같은 형태는 디렉터리를 그 자리에서 지운다).
 struct TempLock {
     dir: std::path::PathBuf,
@@ -32,7 +32,7 @@ impl AsRef<std::path::Path> for TempLock {
 }
 
 impl Drop for TempLock {
-    /// ⚠️ 패닉하지 않는다(언와인딩 중 이중 패닉 = SIGABRT). 권한을 먼저 되돌리는
+    /// 패닉하지 않는다(언와인딩 중 이중 패닉 = SIGABRT). 권한을 먼저 되돌리는
     /// 것은 `store.rs` 픽스처와 같은 이유 — 0500 으로 남은 디렉터리에서
     /// `remove_dir_all` 이 조용히 실패하는 것을 막는다.
     fn drop(&mut self) {
@@ -43,14 +43,14 @@ impl Drop for TempLock {
 
 /// [`TempLock`] 하나를 만든다.
 ///
-/// ⚠️ 예전 doc 은 "pid·thread id 는 **다음 실행**에서 재사용되므로 사전 삭제가
+/// 예전 doc 은 "pid·thread id 는 **다음 실행**에서 재사용되므로 사전 삭제가
 /// 이전 실행의 락 파일을 치운다" 고 적었으나 **틀렸다.** pid 는 `cargo test`
 /// 실행마다 바뀌어 이름이 거의 매칭되지 않았고, 그래서 사전 삭제는 아무것도
 /// 치우지 못한 채 디렉터리가 실행마다 누적됐다(부팅 76분 지연 사고 — 실측
 /// 수치는 `crate::test_support::temp_dir` doc 한 곳에만 적는다).
 /// "acquire 가 파일을 만든다" 단언을 실제로 지키는 것은 `Drop` 이다.
 ///
-/// ⚠️ 반환값을 **이름으로 받을 것.** `temp_lock_path("x").parent()` 처럼 곧바로
+/// 반환값을 **이름으로 받을 것.** `temp_lock_path("x").parent()` 처럼 곧바로
 /// 이어 쓰면 가드가 그 구문 끝에서 drop 되어 디렉터리가 사라지고, 뒤이어
 /// `acquire` 가 같은 트리를 다시 만들어 아무도 지우지 않는 잔여물로 남는다
 /// (`acquire_creates_a_missing_lock_directory_owner_only` 가 실제로 그랬다).
@@ -188,7 +188,7 @@ fn the_lock_is_released_when_the_guard_drops_during_a_panic() {
     let path = temp_lock_path("panic-unwind");
     let guard = acquire(&path, LOCK_DEADLINE).expect("first");
 
-    // ⚠️ 패닉 훅은 프로세스 전역이라 건드리지 않는다(테스트는 병렬 실행된다).
+    // 패닉 훅은 프로세스 전역이라 건드리지 않는다(테스트는 병렬 실행된다).
     // 표준 훅이 stderr 에 남기는 메시지는 의도된 소음이다.
     let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
         let _held = guard;
@@ -414,11 +414,11 @@ fn an_unopenable_lock_path_is_reported_as_io_without_waiting() {
 
 #[test]
 fn acquire_creates_a_missing_lock_directory_owner_only() {
-    // ⚠️ `create_dir_all` 은 mode 에 umask 를 적용해 umask 022 에서 0755 를
+    // `create_dir_all` 은 mode 에 umask 를 적용해 umask 022 에서 0755 를
     // 만든다. 락 파일은 토큰과 **같은 디렉터리**이므로, 락을 먼저 잡는 경로가
     // 0755 로 디렉터리를 만들어 버리면 그 뒤의 모든 `TokenStore::store` 가
     // `BadDirPermissions` 로 영구히 실패한다(설계 §4 = 0700).
-    // ⚠️ 가드를 **이름으로 붙잡는다.** `temp_lock_path("mkdir-mode").parent()` 처럼
+    // 가드를 **이름으로 붙잡는다.** `temp_lock_path("mkdir-mode").parent()` 처럼
     // 곧바로 이어 쓰면 `TempLock` 이 그 구문 끝에서 drop 되어 디렉터리가 사라지고,
     // 뒤이어 `acquire` 가 같은 트리를 다시 만들어 **아무도 지우지 않는 잔여물**로
     // 남는다(실측: 스위트 1회당 정확히 1개 누수 — 이 테스트 하나였다).

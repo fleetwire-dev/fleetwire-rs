@@ -1,6 +1,6 @@
 //! The Fleet API HTTP client: request dispatch, tied to a [`crate::TokenManager`].
 //!
-//! 🔴 **The region trust boundary lives here.** `GetRegion`'s response carries
+//! **The region trust boundary lives here.** `GetRegion`'s response carries
 //! a server-supplied `fleet_api_base_url`, and this client sends **Bearer
 //! tokens** to whatever it adopts as its base URL. A tampered response, a
 //! server malfunction or a poisoned DNS answer therefore turns an
@@ -80,7 +80,7 @@ const BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// [`ClientBuilder::bootstrap_region`] is never called.
 pub const NA_BOOTSTRAP: &str = "https://fleet-api.prd.na.vn.cloud.tesla.com";
 
-/// 🔴 The Fleet API hosts a server-supplied `fleet_api_base_url` may name.
+/// The Fleet API hosts a server-supplied `fleet_api_base_url` may name.
 ///
 /// This is an **exact host set**, deliberately not a suffix rule: a
 /// `host.ends_with("tesla.com")` test is defeated by
@@ -89,14 +89,14 @@ pub const NA_BOOTSTRAP: &str = "https://fleet-api.prd.na.vn.cloud.tesla.com";
 /// `evil-fleet-api.prd.na.vn.cloud.tesla.com`. All three are hosts an
 /// attacker can register, and all three would receive a live Bearer token.
 ///
-/// ⚠️ **The China region host is not here.** The design listed
+/// **The China region host is not here.** The design listed
 /// `fleet-api.prd.cn.vn.cloud.tesla.cn` as an unverified guess (design O11)
 /// and no measurement backs it, so it stays out: the default is **closed**,
 /// and a permissive default whose failure mode is credential leakage is not
 /// a convenience worth buying. A caller who needs it adds it explicitly with
 /// [`ClientBuilder::allow_region_host`].
 ///
-/// ⚠️ This list breaks if Tesla adds a region — that is the intended
+/// This list breaks if Tesla adds a region — that is the intended
 /// direction of failure. The symptom is a 412 that recovery cannot fix, not
 /// a token sent somewhere new.
 pub const TESLA_REGION_HOSTS: &[&str] = &[
@@ -108,7 +108,7 @@ pub const TESLA_REGION_HOSTS: &[&str] = &[
 /// a 412 — **one each, ever, for the whole call** — on top of whatever
 /// [`ClientBuilder::max_attempts`] budgets for opt-in retry.
 ///
-/// # ❗❗ This budget buys **no** extra request for a paid endpoint
+/// # This budget buys **no** extra request for a paid endpoint
 ///
 /// A5c-2a T23 fix round 2. Everything below is written about *requests*, and
 /// its whole framing is money ("turns into real money the moment A4 adds a
@@ -123,7 +123,7 @@ pub const TESLA_REGION_HOSTS: &[&str] = &[
 ///   `max_attempts`, which at the default is 1.
 /// - [`Pricing::NotCharged`] — the arithmetic below applies unchanged.
 ///
-/// ❗❗ **`max_attempts` is the remaining variable, and it is not overridden
+/// **`max_attempts` is the remaining variable, and it is not overridden
 /// here** (fix round 3). An earlier draft of this paragraph said the paid
 /// ceiling was "**1**, whatever `max_attempts` says". That is false, and it is
 /// the same shape of error this task kept finding elsewhere — an equals sign
@@ -131,7 +131,7 @@ pub const TESLA_REGION_HOSTS: &[&str] = &[
 /// `.max_attempts(3)`): **3 requests**, `billing == NotBilled`. Opting in
 /// really does multiply a paid request.
 ///
-/// ⚠️ **Why that is not a hole in the same rule.** [`Error::is_retryable`]
+/// **Why that is not a hole in the same rule.** [`Error::is_retryable`]
 /// admits exactly `TransportNotSent` and `500 | 502 | 503 | 504` — and design
 /// §9.2's table judges **every one of those `NotBilled`** (a ≥500 on a paid
 /// endpoint is not charged; a provably-unsent transport failure is not
@@ -142,12 +142,12 @@ pub const TESLA_REGION_HOSTS: &[&str] = &[
 /// `.max_attempts(3)`: **1 request**, `billing == Billed`, `is_retryable ==
 /// false`.
 ///
-/// ⚠️ It is not free of *all* cost — a retried paid 5xx still draws on the
+/// It is not free of *all* cost — a retried paid 5xx still draws on the
 /// shared `device_data` quota, and Tesla's actual meter is not contractually
 /// bound to §9.2's model. `fleetwire-capture` never opts in
 /// (`scripts/check-wiring.sh` G5 forbids it); other callers should weigh it.
 ///
-/// ⚠️ The recovery still costs **unbilled** traffic on the paid path: the 412
+/// The recovery still costs **unbilled** traffic on the paid path: the 412
 /// arm's re-resolve is one `users/region` call. That is what makes the next
 /// call succeed, and it is free.
 ///
@@ -165,7 +165,7 @@ pub const TESLA_REGION_HOSTS: &[&str] = &[
 /// not multiplied by it: [`Client::send`]'s hard per-call ceiling is
 /// `max_attempts + RECOVERY_BUDGET` Fleet requests **for an unpaid request**.
 /// At the default (`max_attempts == 1`) that reproduces the pre-T8 bound
-/// exactly: `1 + 2 = 3` (original + 401 retry + 412 retry). ⚠️ For a paid
+/// exactly: `1 + 2 = 3` (original + 401 retry + 412 retry). For a paid
 /// request this constant adds **nothing**, so the ceiling is `max_attempts`
 /// alone — 1 at the default, 3 if the caller opted into 3. Per the section
 /// above, the `3` on this line is not the number to reason about *spend*
@@ -184,7 +184,7 @@ const RECOVERY_BUDGET: u32 = 2;
 
 /// The resolved region base URL, with a generation counter.
 ///
-/// ⚠️ **Not a `OnceCell`.** Design §4.3 requires the region to be
+/// **Not a `OnceCell`.** Design §4.3 requires the region to be
 /// *invalidated* when a 412 says this account does not belong to the host it
 /// was sent to, and a `OnceCell` cannot be invalidated — the draft design
 /// contradicted itself here and cross-review caught it.
@@ -270,7 +270,7 @@ pub struct Client {
     #[cfg(test)]
     allowed_region_origins: Vec<TestOrigin>,
     region: RegionCache,
-    /// ❗ **Test-only.** The number of GETs this client **tried to put** on the wire.
+    /// **Test-only.** The number of GETs this client **tried to put** on the wire.
     /// It is incremented immediately before `execute_get`.
     ///
     /// # What it is for — and what it is **not**
@@ -280,7 +280,7 @@ pub struct Client {
     /// (wiremock's `received_requests()`) is not this crate's behaviour — a failure can
     /// only be diagnosed if that difference can be told apart.
     ///
-    /// ⚠️ **The "transport-layer retransmission" claim written down as the rationale when
+    /// **The "transport-layer retransmission" claim written down as the rationale when
     /// this field was first introduced is withdrawn** (A5c-2a T20 fix round 1). During the
     /// T20 implementation it was reported that `[region, vehicle_data, region, vehicle_data]`
     /// had been observed under workspace load, but the reviewer made **about 2 000
@@ -290,7 +290,7 @@ pub struct Client {
     /// reproduce. That the 12 sibling tests still count `received_requests()` and are all
     /// green points to the same conclusion.
     ///
-    /// ❗ **The only code path that produces that sequence is the 412 arm**
+    /// **The only code path that produces that sequence is the 412 arm**
     /// (`invalidate_region` → `resolve_region` → `continue`) — and that arm increments this
     /// counter too. **T23 diagnostic guidance**: if `expect(1)` breaks, look at this value
     /// first. If it is 2, it is the 412 recovery, not the transport layer. **Not comparing**
@@ -301,7 +301,7 @@ pub struct Client {
 
 /// One `#[cfg(test)]` allowed origin, compared field by field.
 ///
-/// ⚠️ **Not** `Url::origin().ascii_serialization()`. That serializes *every*
+/// **Not** `Url::origin().ascii_serialization()`. That serializes *every*
 /// opaque origin to the literal string `"null"`, so registering a single
 /// non-special-scheme URL would make every opaque-origin URL compare equal
 /// to it. Nothing today can reach that (the hatch is test-only and reqwest
@@ -363,7 +363,7 @@ pub enum Guarded<T> {
         /// [`Client::send_guarded`]'s doc for why this is a plain `String`
         /// rather than an enum.
         ///
-        /// ⚠️ Can also be `""`: the probe's `VehicleSummary.state` is itself
+        /// Can also be `""`: the probe's `VehicleSummary.state` is itself
         /// an `Option`, and this field defaults an absent state to the empty
         /// string rather than propagating an `Option` here. This is the
         /// **safe** direction — an unrecognized (including empty) state
@@ -409,7 +409,7 @@ impl<T> core::fmt::Debug for Guarded<T> {
 /// lockstep. Unmetered endpoints (e.g. [`GetRegion`]) send none of these
 /// headers at all, which is why [`Metered::rate_limit`] is an `Option`.
 ///
-/// ⚠️ **Observation only — this crate never throttles automatically.** The
+/// **Observation only — this crate never throttles automatically.** The
 /// quota is shared across every app on the account, so `remaining` here
 /// cannot see what other callers have already spent; sleeping on our own
 /// view of it would be sleeping blind. An in-flight wait would also break
@@ -426,7 +426,7 @@ pub struct RateLimit {
     pub remaining: u64,
     /// The `ratelimit-device-data-per-vehicle-reset` header's **raw** value.
     ///
-    /// ⚠️ Not a [`Duration`](std::time::Duration), and not named
+    /// Not a [`Duration`](std::time::Duration), and not named
     /// `reset_secs` — the unit is an assumption, not a measurement. The
     /// 2026-08-03 measurement only watched this value decrease
     /// (57 → 56 → 55) across three calls a few seconds apart; it did not
@@ -438,7 +438,7 @@ pub struct RateLimit {
 
 /// A response paired with the request quota it reported.
 ///
-/// ⚠️ **Why this exists instead of a `Client::last_rate_limit()` global
+/// **Why this exists instead of a `Client::last_rate_limit()` global
 /// slot.** The quota is **per vehicle**, not per `Client`. A single slot on
 /// `Client` would be overwritten by whichever VIN's call happened to land
 /// last — wrong the moment a caller holds more than one vehicle, issues
@@ -451,7 +451,7 @@ pub struct Metered<T> {
     /// The decoded response.
     ///
     /// For [`Client::send_metered`] this is identical to what [`Client::send`]
-    /// would have returned for the same request. ⚠️ Not so for
+    /// would have returned for the same request. Not so for
     /// [`Client::send_guarded`], whose `T` is a [`Guarded<_>`] — `send` never
     /// returns one, because it never gates.
     pub value: T,
@@ -632,7 +632,7 @@ impl Client {
     /// [`ClientBuilder::max_attempts`] — retrying a transient failure with
     /// backoff.
     ///
-    /// ⚠️ The response type is **not** a free type parameter: it is
+    /// The response type is **not** a free type parameter: it is
     /// [`FleetGet::Response`], bound by the endpoint (final fix wave, Minor
     /// 5). The earlier `send<R, T>` let `send::<GetRegion, VehicleSummary>`
     /// compile and fail at runtime as a decode error, which is exactly what
@@ -654,7 +654,7 @@ impl Client {
     ///   copy, and rotates (or adopts a sibling process's *different*
     ///   rotation) exactly once.
     ///
-    /// ⚠️ **Why rejecting the value, not clearing the cache (final fix wave,
+    /// **Why rejecting the value, not clearing the cache (final fix wave,
     /// Important 1).** A 401 is a server-side event: it does not move the
     /// token's `expires_at`. Merely clearing the in-memory cache therefore
     /// recovers nothing — the retry re-reads the same file, finds
@@ -666,7 +666,7 @@ impl Client {
     /// `auth_401_forces_a_rotation_and_retries_with_a_different_token` pins
     /// the corrected behaviour on the token bytes actually put on the wire.
     ///
-    /// ⚠️ The forced rotation bypasses nothing: it still happens inside the
+    /// The forced rotation bypasses nothing: it still happens inside the
     /// token manager's in-process + inter-process single flight, and it is
     /// still refused by [`crate::MIN_REFRESH_INTERVAL`] and by the
     /// unpersisted-rotation lockout. When the interval refuses it, the
@@ -685,12 +685,12 @@ impl Client {
     /// fails or is refused, the original 412 is returned rather than a
     /// pointless second request to the same host.
     ///
-    /// ⚠️ The 412 body is **never parsed to discover the right region**. The
+    /// The 412 body is **never parsed to discover the right region**. The
     /// URL in that message is the region the request was *sent to*, not the
     /// one it should have gone to; `GET /api/1/users/region` is the only
     /// authority (design §4.3).
     ///
-    /// ⚠️ **Fix round 1 (Important 1): both flags now live for this method's
+    /// **Fix round 1 (Important 1): both flags now live for this method's
     /// *entire* call, shared across every opt-in retry attempt below — they
     /// are not reset per attempt.** The first cut of T8 gave every retry
     /// attempt its own fresh 401/412 budget, which is wrong on two counts:
@@ -723,7 +723,7 @@ impl Client {
     /// retry attempt, since it lived inside the per-attempt helper this
     /// method has since absorbed).
     ///
-    /// ⚠️ [`GetRegion`] itself is exempt. It *is* the resolution primitive —
+    /// [`GetRegion`] itself is exempt. It *is* the resolution primitive —
     /// dispatching it through region resolution would be circular, and would
     /// send a redundant second copy of the very request that just answered.
     /// A caller asking for the region still benefits from an already-warm
@@ -747,7 +747,7 @@ impl Client {
     /// [`Error::is_retryable`] says so, up to `max_attempts` total decode
     /// attempts, each pair separated by an exponential-plus-jitter backoff
     /// sleep capped at [`BACKOFF_MAX`] (design §9: "exponential + jitter,
-    /// cap 30s"). ⚠️ [`Error::TransportUnknown`] is never retried even
+    /// cap 30s"). [`Error::TransportUnknown`] is never retried even
     /// though it is common and often actually safe to retry — see
     /// [`Error::is_retryable`]'s doc for why the line is drawn at the
     /// status/variant level rather than at "was this actually billed".
@@ -763,7 +763,7 @@ impl Client {
     /// gap [`ClientBuilder::request_timeout`] alone cannot close: a
     /// per-attempt timeout bounds one attempt, not a chain of several.
     ///
-    /// ⚠️ **Deliberate deviation from design §9.2's literal text.** The
+    /// **Deliberate deviation from design §9.2's literal text.** The
     /// design says to wrap the whole chain in a single `tokio::time::timeout`
     /// ("wrap the whole retry chain in `tokio::time::timeout`"). This method
     /// instead tracks `started.elapsed()` against `retry_deadline` and clamps
@@ -782,7 +782,7 @@ impl Client {
     ///
     /// # Request-count bound
     ///
-    /// ❗❗ **The bound depends on `req.pricing()`, and the paid one is what
+    /// **The bound depends on `req.pricing()`, and the paid one is what
     /// costs money** (A5c-2a T23 fix round 2). Read the paid row first:
     ///
     /// | `req.pricing()` | Fleet requests for `req` itself, at the default `max_attempts == 1` |
@@ -793,7 +793,7 @@ impl Client {
     /// The `+ RECOVERY_BUDGET` ceiling is the structural backstop for the free
     /// row and still applies to it unchanged; see that constant's doc.
     ///
-    /// ⚠️ **"1" is about `req`, not about the wire.** A paid call may still cost
+    /// **"1" is about `req`, not about the wire.** A paid call may still cost
     /// **unbilled** requests around it: up to 2 calls to
     /// [`Client::resolve_region`] (one pre-flight + one 412-recovery
     /// re-resolve — the recovery still happens for paid requests, it just does
@@ -821,7 +821,7 @@ impl Client {
     /// (token directory/refresh failures) directly — those never reach the
     /// retry decision at all.
     ///
-    /// ⚠️ **One exception, and it is about money (final fix wave, Important
+    /// **One exception, and it is about money (final fix wave, Important
     /// 2): a token-layer failure on a *later* iteration does not overwrite
     /// the error of the most recent actual attempt.** Iteration 1 may have
     /// received a real, *billed* 401 or 412; if iteration 2 then fails
@@ -849,7 +849,7 @@ impl Client {
     /// contract [`Client::send`] documents exists exactly once. Not `pub` —
     /// callers use one of the three thin wrappers.
     ///
-    /// ❗❗ **`S` is the only thing the three wrappers vary.** Everything that
+    /// **`S` is the only thing the three wrappers vary.** Everything that
     /// costs money or protects a token — the scope pre-check, region
     /// resolution and its host validation, the 401/412 recovery budget, the
     /// retry policy (`max_attempts`, default 1 = *no retry*), the transport's
@@ -869,14 +869,14 @@ impl Client {
         let hard_cap = self.max_attempts.saturating_add(RECOVERY_BUDGET);
 
         // Design §10.1 step 1 — the cheapest possible check, ahead of region
-        // resolution and every other Fleet request below (💰 0, advisory).
+        // resolution and every other Fleet request below (0, advisory).
         // It reads the access token's `scp` claim **without verifying the
         // token's signature**, so this is not an authorization decision —
         // it exists only to avoid paying for a call the server will
         // certainly reject. The server's own 403 remains the actual
         // authority (see `Error::MissingScope`'s doc).
         //
-        // ⚠️ `Indeterminate` and `ContainsRequiredScope` MUST take this same
+        // `Indeterminate` and `ContainsRequiredScope` MUST take this same
         // arm (design §10, this method's own contract). A JWT-shaped opaque
         // token or an unparseable payload gives `Indeterminate`, and there
         // is no way to tell that apart from "genuinely holds the scope" —
@@ -898,7 +898,7 @@ impl Client {
         if let crate::auth::UnverifiedScopeObservation::DoesNotContainRequiredScope =
             crate::auth::observe_scopes(&scope_check_token, &required)
         {
-            // ⚠️ No `held` field (final fix wave, Minor 3). `observe_scopes`
+            // No `held` field (final fix wave, Minor 3). `observe_scopes`
             // deliberately returns a verdict, not the parsed claims (REQ-18:
             // "a verdict, not a diagnostic"), so the only value this call
             // site could put there was an empty vector — which `Display`
@@ -983,7 +983,7 @@ impl Client {
             // Structural backstop (see `RECOVERY_BUDGET`'s doc) — neither
             // recovery path is self-limiting on its own.
             //
-            // ❗❗ **A paid request is never re-fired to recover from a 401 or a
+            // **A paid request is never re-fired to recover from a 401 or a
             // 412** (A5c-2a T23 fix round 1, controller ruling). Both arms below
             // re-send *the same request*, and on `Pricing::Data` that second
             // request is a second charge. The two recoveries are not exempt from
@@ -998,7 +998,7 @@ impl Client {
             // - A **401** is the same story with `Error::Auth { pricing: Some(..) }`,
             //   which design §9.2 bills.
             //
-            // ❗❗❗ **What is suppressed is the *re-send*, and nothing else**
+            // **What is suppressed is the *re-send*, and nothing else**
             // (T23 fix round 2). The first cut of this rule gated arm *entry* on
             // `!paid`, which also skipped `reject_generation` and
             // `invalidate_region` — so a consumer that calls **only** paid
@@ -1018,13 +1018,13 @@ impl Client {
             // succeeds. `a_412_…`/`a_401_on_a_paid_endpoint_is_not_re_fired`
             // assert both halves — one request per `send`, second `send` **Ok**.
             //
-            // ⚠️ Scope: this governs the two *recovery* arms only. The opt-in
+            // Scope: this governs the two *recovery* arms only. The opt-in
             // retry path below (`backoff_before_retry`) is already off by default
             // (`max_attempts == 1`) and is additionally forbidden to
             // `fleetwire-capture` by `scripts/check-wiring.sh` G5, so it is left
             // to the caller's explicit choice rather than overridden here.
             //
-            // ⚠️ A paid 412 still spends one **free** `users/region` request here.
+            // A paid 412 still spends one **free** `users/region` request here.
             // That is the price of healing, it is unbilled, and it is bounded by
             // `region_retry_used` to once per call.
             let paid = matches!(req.pricing(), Pricing::Data { .. });
@@ -1032,7 +1032,7 @@ impl Client {
             match raw.status.as_u16() {
                 401 if may_recover && !auth_retry_used => {
                     auth_retry_used = true;
-                    // ❗ The side effect runs for **every** pricing. Rejecting the
+                    // The side effect runs for **every** pricing. Rejecting the
                     // generation is what makes the *next* call carry a different
                     // token; withholding it from paid callers is what left them
                     // unable to heal (see the block comment above).
@@ -1053,7 +1053,7 @@ impl Client {
                 }
                 412 if may_recover && !region_retry_used => {
                     region_retry_used = true;
-                    // ❗ Same rule as the 401 arm: invalidate and re-resolve for
+                    // Same rule as the 401 arm: invalidate and re-resolve for
                     // every pricing, so the next call has a usable region.
                     self.invalidate_region(region_gen);
                     let resolved = self.resolve_region().is_ok();
@@ -1117,7 +1117,7 @@ impl Client {
     /// carry `ratelimit-device-data-per-vehicle-{limit,remaining,reset}`
     /// headers; unmetered endpoints send none of them).
     ///
-    /// ⚠️ **Success path only.** An error response can carry these headers
+    /// **Success path only.** An error response can carry these headers
     /// too (the 408s measured 2026-08-03 did), but surfacing that is a
     /// separate concern from this method — [`Error`] does not carry a
     /// `RateLimit` field, so a failed call never reaches here at all.
@@ -1127,7 +1127,7 @@ impl Client {
     /// overwritten by whichever response landed last, so the value must ride
     /// on the exact response that produced it.
     ///
-    /// ⚠️ **The quota's scope is unmeasured** — open item `O16` in this
+    /// **The quota's scope is unmeasured** — open item `O16` in this
     /// crate's module doc. The header is *named* `per-vehicle`, but the O1
     /// evidence matrix's own text reads account-shared, and this subproject's
     /// measurement (one account, one vehicle) cannot tell the two apart. An
@@ -1148,7 +1148,7 @@ impl Client {
     /// **body verbatim** as one [`serde_json::Value`] instead of this
     /// endpoint's model type.
     ///
-    /// # ❗❗ Why this exists — the one thing typed responses cannot do
+    /// # Why this exists — the one thing typed responses cannot do
     ///
     /// This crate's model types are deliberately tolerant: every one carries a
     /// `#[serde(flatten)] extra` map, so a field Tesla **adds** is absorbed
@@ -1165,7 +1165,7 @@ impl Client {
     /// drift without shipping a new version of this library.** It is what the
     /// `fleetwire-capture` operations tool is built on.
     ///
-    /// # ❗❗ It returns **unscrubbed** data
+    /// # It returns **unscrubbed** data
     ///
     /// The value is the response exactly as Tesla sent it: VIN, GPS
     /// coordinates, odometer, addresses, charge history — whatever the
@@ -1178,7 +1178,7 @@ impl Client {
     /// - Treat the value as PII for its whole lifetime, and scrub before it
     ///   reaches disk, a log, or a repository.
     ///
-    /// # ❗ It does **not** validate the body against the endpoint
+    /// # It does **not** validate the body against the endpoint
     ///
     /// [`Client::send`] proves the body still fits this endpoint's type;
     /// failing that check *is* the drift signal. `send_raw` proves only that
@@ -1195,10 +1195,10 @@ impl Client {
     /// and 5xx becoming [`Error`] rather than being handed back as data; and
     /// the 401/412 recovery budget.
     ///
-    /// ❗ **Including the retry policy.** `max_attempts` defaults to 1, which
+    /// **Including the retry policy.** `max_attempts` defaults to 1, which
     /// *is* "no retry" — there is no separate retry path here.
     ///
-    /// ⚠️ **That default is not what stops a paid request from being billed
+    /// **That default is not what stops a paid request from being billed
     /// twice, and two earlier drafts of this paragraph said it was.** The
     /// first blamed a 408; the second moved the same claim onto a *retryable
     /// 5xx*. Both are wrong, and the code says so in one place:
@@ -1217,7 +1217,7 @@ impl Client {
     /// uncertainty, not a known billed duplicate, is why the default stays 1
     /// and why `fleetwire-capture` never opts in.
     ///
-    /// ❗ The path that really could send a **billed** request twice under the
+    /// The path that really could send a **billed** request twice under the
     /// default is the 401/412 recovery budget mentioned above (a 401 and a 412
     /// are `Billed`); it is pricing-aware and re-fires nothing paid.
     ///
@@ -1283,7 +1283,7 @@ impl Client {
     /// three consecutive calls). This method spends the free probe to avoid
     /// paying for that 408 when it can.
     ///
-    /// ⚠️ **Not a strict win — and on an unpaid endpoint, a pure loss.**
+    /// **Not a strict win — and on an unpaid endpoint, a pure loss.**
     /// `R: VehicleEndpoint` admits every one of this crate's 11 vehicle
     /// endpoints, 9 of which are [`Pricing::NotCharged`]. Gating one of those
     /// nine (e.g. `send_guarded(&GetVehicle::new(vin)?)`) buys nothing — the
@@ -1297,7 +1297,7 @@ impl Client {
     /// the default way to reach a `VehicleEndpoint`, and why the gate is
     /// worth reaching for only on those two billed endpoints.
     ///
-    /// ⚠️ **Request bound: double [`Client::send`]'s.** [`Client::send`]
+    /// **Request bound: double [`Client::send`]'s.** [`Client::send`]
     /// documents its own worst case as `max_attempts + RECOVERY_BUDGET`
     /// Fleet requests. This method makes up to two such calls — the free
     /// probe, then (if online) `req`'s own call — so its worst case is
@@ -1308,14 +1308,14 @@ impl Client {
     /// more *money* than calling [`Client::send`] directly would — only more
     /// requests.
     ///
-    /// ⚠️ **TOCTOU: reduces cost, does not eliminate it.** The vehicle can
+    /// **TOCTOU: reduces cost, does not eliminate it.** The vehicle can
     /// fall asleep in the gap between the probe response and the paid call
     /// this method then makes — that race is not closed, and the 408 it
     /// produces is, per the measurement above, still billed. This gate
     /// removes the *common* case (already asleep when the caller asks), not
     /// every case.
     ///
-    /// ⚠️ **Fail-closed.** If the probe itself errors — network failure,
+    /// **Fail-closed.** If the probe itself errors — network failure,
     /// 401, 5xx, anything — this method returns that error and does **not**
     /// fall through to the paid call. The gate exists to answer "should I
     /// spend money"; proceeding anyway when it cannot answer would cost more
@@ -1413,7 +1413,7 @@ impl ClientBuilder {
     /// `n - 1` retries, each separated by backoff — see [`Client::send`]'s
     /// doc for the exact chain).
     ///
-    /// ⚠️ **Defaults to `1` — no retry.** Retry-on-by-default is an explicit
+    /// **Defaults to `1` — no retry.** Retry-on-by-default is an explicit
     /// non-goal of the upstream spec (design §11, restated at §9.0 after two
     /// independent reviewers flagged the earlier draft's backoff table and
     /// `is_retryable() == true` as dead code sitting next to `max_attempts =
@@ -1449,7 +1449,7 @@ impl ClientBuilder {
     /// Adds one more host a server-supplied `fleet_api_base_url` may name,
     /// on top of [`TESLA_REGION_HOSTS`].
     ///
-    /// 🔴 **This widens the set of hosts that can receive your Bearer
+    /// **This widens the set of hosts that can receive your Bearer
     /// token.** Adding a host means "I accept that Tesla's region endpoint
     /// may redirect my credentials here". Everything else
     /// [`validate_region_url`] checks still applies — https, no userinfo,
@@ -1473,7 +1473,7 @@ impl ClientBuilder {
     /// Test-only: accept one full origin (`scheme://host:port`) verbatim as
     /// a region URL.
     ///
-    /// ⚠️ **Why this exists.** `wiremock` serves plain HTTP on an ephemeral
+    /// **Why this exists.** `wiremock` serves plain HTTP on an ephemeral
     /// port, so a mock region response can only ever name
     /// `http://127.0.0.1:PORT` — which [`validate_region_url`] rejects
     /// twice over (not https, not the default port), correctly. Without a
@@ -1500,7 +1500,7 @@ impl ClientBuilder {
 
     /// Builds the [`Client`].
     ///
-    /// # ⚠️ Redirects are disabled on the underlying `reqwest::Client`
+    /// # Redirects are disabled on the underlying `reqwest::Client`
     ///
     /// `reqwest`'s default policy follows up to 10 redirects automatically.
     /// [`crate::transport::execute_get`] has a guard that rejects a 3xx
@@ -1590,7 +1590,7 @@ fn check_region_url_shape(url: &crate::Url) -> Result<(), Error> {
     Ok(())
 }
 
-/// 🔴 Decides whether a server-supplied region URL may become this client's
+/// Decides whether a server-supplied region URL may become this client's
 /// base URL.
 ///
 /// **This function is the crate's credential trust boundary.** A URL that
@@ -1609,7 +1609,7 @@ fn check_region_url_shape(url: &crate::Url) -> Result<(), Error> {
 /// | 5 | path is empty or `/` | path-prefix injection under the API paths |
 /// | 6 | no query or fragment | same |
 ///
-/// ⚠️ Check 2 is **exact equality**, never a suffix test. `ends_with` fails
+/// Check 2 is **exact equality**, never a suffix test. `ends_with` fails
 /// three ways an attacker can register: `tesla.com.attacker.net`,
 /// `nottesla.com`, and `evil-fleet-api.prd.na.vn.cloud.tesla.com`. The unit
 /// test carries an input for each.
@@ -1640,7 +1640,7 @@ fn validate_region_url(raw: &str, allowed: &[String]) -> Result<crate::Url, Erro
 
 /// What [`Client::send_inner`] turns one raw response into.
 ///
-/// ❗ **The only axis on which `send`, `send_metered` and [`Client::send_raw`]
+/// **The only axis on which `send`, `send_metered` and [`Client::send_raw`]
 /// differ.** Everything else — money, tokens, redirects, retries — is shared;
 /// see `send_inner`'s doc. Implementors are zero-sized type-level tags, never
 /// constructed.
@@ -1687,7 +1687,7 @@ struct Raw;
 impl ResponseShape for Raw {
     type Out = serde_json::Value;
 
-    /// ⚠️ The type parameter is irrelevant here and that is not an accident:
+    /// The type parameter is irrelevant here and that is not an accident:
     /// [`crate::decode::decode_with_txid_header`] resolves every status
     /// `>= 400` **before** it looks at the body, so a 401/412 produces the same
     /// [`Error`] whatever it would have decoded into. `serde_json::Value` is
@@ -1728,7 +1728,7 @@ impl ResponseShape for Raw {
 /// is called with it cannot — `decode` returns `Err` for every status `>=
 /// 400` before it looks at the body.
 ///
-/// ⚠️ **This doc belongs to this function, not to [`ResponseShape`]** (A5c-2a
+/// **This doc belongs to this function, not to [`ResponseShape`]** (A5c-2a
 /// T20 fix round 1). The `ResponseShape` refactor moved the doc block off this
 /// item and left it attached to the trait, where the closing paragraph read as
 /// a statement about the trait's contract. `rustdoc`'s `-D warnings` gate does
@@ -1814,7 +1814,7 @@ fn backoff_delay(retries_used: u32) -> Duration {
 ///
 /// See [`backoff_delay`] for why a `rand`-crate PRNG isn't needed here — but
 /// the source still has to actually decorrelate the callers that full
-/// jitter exists to decorrelate. ⚠️ **Fix round 1 (Important 2): sub-second
+/// jitter exists to decorrelate. **Fix round 1 (Important 2): sub-second
 /// wall-clock time alone does not.** Two clients reacting to the *same*
 /// synchronized failure at the *same* instant — precisely the scenario
 /// jitter exists to protect against — would read nearly identical

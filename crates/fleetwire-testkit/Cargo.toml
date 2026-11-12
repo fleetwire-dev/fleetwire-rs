@@ -9,7 +9,7 @@ publish = false
 description = "Test-only std HTTP/1.1 mock server with a wiremock-shaped API (dev-dependency only)"
 
 [dependencies]
-# 시험 전용입니다. 다른 크레이트는 이 크레이트를 dev-dependency 로만 씁니다.
+# Test-only. Other crates use this crate as a dev-dependency only.
 serde = { workspace = true }
 serde_json = { workspace = true }
 url = "2"

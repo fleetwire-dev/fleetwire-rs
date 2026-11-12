@@ -90,7 +90,7 @@ impl TokenSet {
 
     /// Builds a new set of tokens from a refresh result.
     ///
-    /// ⚠️ `expires_at` is computed and passed in **by the caller**. Neither this type nor
+    /// `expires_at` is computed and passed in **by the caller**. Neither this type nor
     /// [`TokenStore::store`] does any time arithmetic — when `now + expires_in` meets a
     /// pre-epoch clock (`u64::MAX`) the result is a token that "never expires", so that
     /// computation lives in one place only, [`super::TokenManager::access_token`], which
@@ -243,7 +243,7 @@ impl TokenStore {
     /// `Ok`. Using the new tokens after a failed save means the next refresh will need a
     /// re-OAuth.
     ///
-    /// ⚠️ **`expires_at` is not computed here.** The [`TokenSet`] received is serialized as
+    /// **`expires_at` is not computed here.** The [`TokenSet`] received is serialized as
     /// is. When `now + expires_in` meets the pre-epoch fallback of [`crate::clock`]
     /// (`u64::MAX`) it saturates and nails a token that "never expires" onto disk — the
     /// expiry computation lives in one place only, A2 Task 7, which knows about the hazard.
@@ -292,7 +292,7 @@ impl TokenStore {
     ///   existed as 0775 stays as it is, so this covers only half. The other half is
     ///   [`TokenStore::ensure_private_dir`].
     ///
-    /// ⚠️ **Do not use the check-only counterpart (`ensure_private_dir` without creation).**
+    /// **Do not use the check-only counterpart (`ensure_private_dir` without creation).**
     /// It returns [`StoreError::NotFound`] when the directory does not exist yet, so it blocks
     /// outright any path on which the directory is missing, such as right after the first
     /// login. This is also the function [`super::TokenManager`] calls before taking the file
@@ -409,7 +409,7 @@ mod tests {
     /// would reach the code path it meant to exercise (exactly the same trap as the fixture
     /// in the original plan text failing to reach parsing because of the umask).
     ///
-    /// ❗ With the immediately-dropped form (`TokenStore::new(temp_dir("x").join(..))`) the
+    /// With the immediately-dropped form (`TokenStore::new(temp_dir("x").join(..))`) the
     /// directory disappears before the test starts. Always bind it with
     /// `let dir = temp_dir("x");`, and if an owned `PathBuf` is needed, pass
     /// `dir.to_path_buf()` while keeping `dir` alive. Since it is `Deref<Target = Path>`,
@@ -435,7 +435,7 @@ mod tests {
         /// arrives here still at 0500, and then `remove_dir_all` fails silently and the leak
         /// remains.
         ///
-        /// ⚠️ This does not panic — a double panic during unwinding is a SIGABRT.
+        /// This does not panic — a double panic during unwinding is a SIGABRT.
         fn drop(&mut self) {
             let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o700));
             let _ = std::fs::remove_dir_all(&self.0);
@@ -448,7 +448,7 @@ mod tests {
     /// a run that reused the same pid could not even run `Drop`, for example because of
     /// SIGKILL.
     ///
-    /// ⚠️ The earlier doc said "the pid and thread id are reused on the next run, so the
+    /// The earlier doc said "the pid and thread id are reused on the next run, so the
     /// up-front removal clears the leftovers of the previous run", but that was **wrong.**
     /// The pid changed on every run so the names almost never matched; as a result one
     /// directory per (run × tag × thread) accumulated permanently in `/tmp`, and it became an
@@ -767,7 +767,7 @@ mod tests {
     fn load_refuses_a_symlinked_token_file() {
         let dir = temp_dir("symlink");
         let real = dir.join("elsewhere.json");
-        // ⚠️ 미끼를 0600 으로 둔다. 0644 로 두면 링크를 **따라가는** 구현도
+        // 미끼를 0600 으로 둔다. 0644 로 두면 링크를 **따라가는** 구현도
         // 권한 검사에서 걸려 Err 가 되므로, 이 테스트가 symlink 검사가 아니라
         // 권한 검사를 시험하게 된다(계획서 원문의 취약점).
         write_file_with_mode(&real, VALID_JSON, 0o600);
@@ -827,7 +827,7 @@ mod tests {
 
     #[test]
     fn load_reports_not_found_distinctly_from_io_error() {
-        // ⚠️ `TempDir` 은 가드다 — 바인딩을 살려 둬야 디렉터리가 단언 시점까지 존재한다.
+        // `TempDir` 은 가드다 — 바인딩을 살려 둬야 디렉터리가 단언 시점까지 존재한다.
         //    `TokenStore::new(temp_dir(..))` 처럼 즉시 버리면 "디렉터리가 있는데 파일만
         //    없다" 를 시험하려던 첫 단언이 몰래 "디렉터리도 없다" 로 바뀐다.
         let dir = temp_dir("missing");
@@ -1012,7 +1012,7 @@ mod tests {
 
     #[test]
     fn store_creates_a_missing_token_directory() {
-        // ⚠️ 가드 바인딩을 살려 둔다 — 즉시 버리면 조상 디렉터리째 사라져서
+        // 가드 바인딩을 살려 둔다 — 즉시 버리면 조상 디렉터리째 사라져서
         //    `store` 가 만드는 것이 `nested/deep` 이 아니라 트리 전체가 된다.
         let root = temp_dir("mkdir");
         let store = TokenStore::new(root.join("nested").join("deep"));
@@ -1131,7 +1131,7 @@ mod tests {
 
     #[test]
     fn store_writes_the_token_verbatim_without_recomputing_expiry() {
-        // ⚠️ A2 Task 3 리뷰에서 넘어온 위험: epoch 이전 시계에서 `now + expires_in`
+        // A2 Task 3 리뷰에서 넘어온 위험: epoch 이전 시계에서 `now + expires_in`
         // 은 u64::MAX 로 포화해 "영원히 만료되지 않는" 토큰을 남긴다. Task 4 의
         // `store` 는 시각 계산을 **하지 않는다** — 받은 것을 그대로 쓴다.
         // 미지 필드 보존도 같은 단언으로 못박는다(파일을 왕복해도 잃지 않는다).
@@ -1165,7 +1165,7 @@ mod tests {
         // `open(2)` 이 **영원히 블록한다**. 검사가 열기보다 먼저여야 하는 진짜 이유가
         // 그것이고, 오류 종류가 아니라 "끝나기는 하는가" 로 못박는다.
         //
-        // ⚠️ mkfifo(1) 이 없으면 조용히 건너뛴다(프로세스 전역 상태 미사용).
+        // mkfifo(1) 이 없으면 조용히 건너뛴다(프로세스 전역 상태 미사용).
         let dir = temp_dir("fifo");
         let path = dir.join(TOKEN_FILE);
         let made = std::process::Command::new("mkfifo")

@@ -80,7 +80,7 @@ pub(crate) enum Stage {
 
 /// Sorts ureq 3.3 errors into stages (spec §4, r1.1 table). Anything not known is Unknown.
 ///
-/// ⚠️ A DNS failure (`Io(Uncategorized)`) and a TLS failure (`Io(InvalidData)`) are Unknown
+/// A DNS failure (`Io(Uncategorized)`) and a TLS failure (`Io(InvalidData)`) are Unknown
 /// because their stage cannot be proven. A write failure on a socket taken from the pool is
 /// also Unknown, because it only shows up as a reset or EOF on the next read (this prevents
 /// double billing).

@@ -1,11 +1,10 @@
-# 시험 코드에서는 unwrap·panic! 을 허용합니다(워크스페이스 린트 unwrap_used·panic 은 제품 코드에만 걸립니다).
+# Test code may use unwrap and panic! (the `unwrap_used` and `panic` lints bind product code only).
 allow-unwrap-in-tests = true
 allow-panic-in-tests = true
 
-# 단일 입구가 정해진 함수를 이유·대안과 함께 막습니다(워크스페이스 린트 disallowed_methods = "deny").
-# 리뷰에서 같은 지적이 두 번째 나오고 그것이 「이 함수 대신 저 함수」 꼴이면 여기에 한 줄 더합니다(REVIEW.md §5).
-# 더하기 전에 지금 사용처를 세고, 남은 사용처는 고치거나 그 자리에 이유와 함께 allow 를 둡니다(grok-build clippy.toml 패턴).
+# Functions with one sanctioned alternative, each with its reason (workspace lint
+# `disallowed_methods = "deny"`).
 disallowed-methods = [
-  { path = "std::fs::canonicalize", reason = "심볼릭 링크를 따라갑니다. 이 리포의 파일 열기는 O_NOFOLLOW 정책이라 경로는 받은 그대로 씁니다" },
-  { path = "std::env::home_dir", reason = "계정마다 달라 서버(systemd 서비스 계정)에서 틀립니다. 경로는 명령행 인자·설정으로 받습니다" },
+  { path = "std::fs::canonicalize", reason = "it follows symbolic links; files here are opened with O_NOFOLLOW, so use the path as given" },
+  { path = "std::env::home_dir", reason = "it depends on the account running the process; take paths from arguments or configuration" },
 ]

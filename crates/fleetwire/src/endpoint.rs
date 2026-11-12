@@ -25,7 +25,7 @@ pub trait FleetGet: crate::sealed::Sealed + Send + Sync {
     type Response;
     /// Assembles the wire value and its sibling metadata into the public type.
     ///
-    /// ⚠️ **Associated function (no `self`).** Assembly must not depend on the
+    /// **Associated function (no `self`).** Assembly must not depend on the
     /// request instance's values. A `&self` receiver would let an implementor
     /// mix request state into the response, which is not this layer's job.
     fn assemble(
@@ -109,7 +109,7 @@ mod tests {
         assert_eq!(out, serde_json::json!({"a":1}));
     }
 
-    /// ⚠️ assemble is an associated function — it does not take `&self`.
+    /// assemble is an associated function — it does not take `&self`.
     /// This is because values of the request instance must not get mixed into the response
     /// (design §2.2).
     #[test]

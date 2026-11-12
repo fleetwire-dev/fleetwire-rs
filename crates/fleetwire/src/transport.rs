@@ -30,7 +30,7 @@ pub(crate) struct RawResponse {
     /// `ratelimit-device-data-per-vehicle-{limit,remaining,reset}` headers
     /// (A4 Task 10, measured 2026-08-03).
     ///
-    /// ⚠️ **`Some` only when all three headers are present and all three
+    /// **`Some` only when all three headers are present and all three
     /// parse as `u64`.** A partial set (e.g. two of three present, or one
     /// present but not numeric) yields `None` — inventing a value from a
     /// partial read would be worse than reporting nothing.
@@ -150,7 +150,7 @@ pub(crate) fn execute_get(
         });
     }
 
-    // ⚠️ buffer-then-check 금지 — `read_capped` 가 누적하며 상한과 마감을 검사합니다.
+    // buffer-then-check 금지 — `read_capped` 가 누적하며 상한과 마감을 검사합니다.
     let body = match read_capped(
         &mut resp.body_mut().as_reader(),
         MAX_RESPONSE_BYTES,
