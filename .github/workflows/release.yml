@@ -1,0 +1,60 @@
+name: release
+# Runs when a version tag (v*) is pushed: publishes the crate to crates.io, then creates the GitHub
+# release from the matching CHANGELOG section. The publish job waits for approval through the
+# `crates-io` environment; a published version can be yanked but never deleted.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - name: tag matches the crate version and the changelog
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 --locked \
+            | jq -r '.packages[] | select(.name == "fleetwire") | .version')
+          test "v$version" = "$GITHUB_REF_NAME"
+          grep -q "^## \[$version\]" CHANGELOG.md
+      - run: cargo +stable test --workspace --all-targets --all-features --locked
+      - run: cargo +stable test --workspace --doc --all-features --locked
+      - name: publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo +stable publish -p fleetwire --locked
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: create the release from the changelog section
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '
+            /^## \[/ { on = (index($0, "## [" v "]") == 1); next }
+            on { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "fleetwire $version" \
+            --notes-file "$RUNNER_TEMP/notes.md"

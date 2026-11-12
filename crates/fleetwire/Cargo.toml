@@ -12,8 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/fleetwire"
 keywords = ["tesla", "fleet", "api", "http-client", "vehicle"]
 categories = ["api-bindings", "web-programming::http-client"]
-# Guard: remove when the crate is ready to publish.
-publish = false
 
 [lints]
 workspace = true
