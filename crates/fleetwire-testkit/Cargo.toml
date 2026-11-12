@@ -1,0 +1,18 @@
+[package]
+name = "fleetwire-testkit"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Test-only std HTTP/1.1 mock server with a wiremock-shaped API (dev-dependency only)"
+
+[dependencies]
+# 시험 전용입니다. 다른 크레이트는 이 크레이트를 dev-dependency 로만 씁니다.
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = "2"
+
+[lints]
+workspace = true

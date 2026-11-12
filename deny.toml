@@ -1,0 +1,59 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib"]
+
+# ❗ `webpki-roots` 는 코드가 아니라 **데이터**(Mozilla CA 루트 번들)이며 CDLA-Permissive-2.0 —
+#    데이터셋용 허용 라이선스 — 으로 배포된다. reqwest/hyper-rustls 를 통해 들어오므로 우리가
+#    고를 수 있는 것이 아니다.
+# ⚠️ 전역 `allow` 가 아니라 **이 크레이트 한정 예외**로 둔다. CDLA 가 다른 의존성으로 조용히
+#    번지면 그때는 다시 error 가 나야 한다.
+# ⚠️ 이 실패는 T11 이전부터 있던 선행 상태다(BASE aa99600 에서 실측 확인). T11 부터 커밋
+#    게이트에 `cargo deny check advisories licenses` 가 들어오면서 해소해야 했다.
+[[licenses.exceptions]]
+crate = "webpki-roots"
+allow = ["CDLA-Permissive-2.0"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# ❗ `fleetwire = { path = "../fleetwire" }` 는 버전 없는 path 의존이라 `wildcards = "deny"` 에
+#    걸렸다(A5b 이월 O10 — T11 에서 해소). 이것은 크레이트를 게시하지 않기 때문에 생기는 것이며 —
+#    `fleetwire-capture` 는 `publish = false` 다 — 공급망 위험이 아니다. cargo-deny 는 정확히 이
+#    경우를 위한 예외를 갖는다: **path 형태의 wildcard 만** 봐준다.
+# ⚠️ 이것은 wildcards 규칙을 끄는 것이 **아니다**. crates.io 에서 오는 `foo = "*"` 는 그대로
+#    error 로 남는다 — 실제로 막고 싶은 것은 그쪽이다.
+allow-wildcard-paths = true
+
+# ❗ `serde_json/preserve_order` 는 이 저장소에서 **금지**다.
+#
+# 이 feature 를 켜면 `serde_json::Map` 이 BTreeMap → IndexMap(삽입 순서)으로 바뀐다.
+# `fleetwire-capture` 의 `observe::shape_hash_of_object` 는 그 Map 을 직접 순회해
+# 키 순서를 해시에 넣고, 그 해시는 `variants` 로 **공개 저장소에 바이트로 커밋되는**
+# baseline 에 들어간다. 즉 순서가 곧 계약이다 — feature 가 켜지는 순간 저장소의
+# 모든 baseline 이 한꺼번에 `VariantsChanged` 를 내고, 대규모 Tesla 스키마 변경과
+# 구별되지 않는다. 직접 의존성을 고치지 않아도 워크스페이스 어디선가 켜면 cargo 의
+# feature unification 으로 들어온다는 것이 이 항목이 있는 이유다.
+#
+# ⚠️ 이것은 **보조** 방어선이다. 1차 방어선은 여전히
+# `observe::tests::serde_json_maps_are_key_ordered_not_insertion_ordered` 유닛 테스트다 —
+# T11 부터 커밋 게이트가 `cargo deny check advisories licenses` 를 돌리지만 `bans` 는
+# 아직 게이트에 없다. 문법은 cargo-deny 0.20.2 로 **실측** 확인했다(2026-08-05 T11 재확인) —
+# 이 항목의 deny 목록에 (이미 켜져 있는) `std` 를 잠시 넣으면 `error[feature-banned]: feature
+# 'std' for crate 'serde_json = 1.0.151' is explicitly denied` 가 실제로 뜬다. 즉 규칙이 살아
+# 있고, `preserve_order` 가 오늘 꺼져 있어서 통과하는 것이다. `crate =` 표기는 >= 0.14.12 필요.
+[[bans.features]]
+crate = "serde_json"
+deny = ["preserve_order"]
+reason = "삽입 순서 Map 은 Tesla 의 wire 키 순서를 공개 baseline 지문에 실어 보낸다"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,8 @@
+/target/
+**/*.rs.bk
+.env
+.env.*
+!.env.example
+# 토큰 파일은 저장소에 들어오면 안 됩니다.
+tokens.json
+*.token
