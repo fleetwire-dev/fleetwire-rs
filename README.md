@@ -1,5 +1,7 @@
 # fleetwire
 
+[![ci](https://github.com/fleetwire-dev/fleetwire-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/fleetwire-dev/fleetwire-rs/actions/workflows/ci.yml)
+
 An **unofficial, read-only** Rust client for the Tesla Fleet API that knows which calls cost money.
 
 > **Not affiliated with, endorsed by, or sponsored by Tesla, Inc.**
