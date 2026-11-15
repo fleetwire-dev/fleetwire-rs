@@ -1,6 +1,6 @@
 [package]
 name = "fleetwire"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unofficial read-only client for the Tesla Fleet API"
 edition.workspace = true
 rust-version.workspace = true

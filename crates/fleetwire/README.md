@@ -13,6 +13,31 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
 - **Synchronous.** Built on `ureq` with rustls. No async runtime needed.
 - **Careful with tokens.** `TokenManager` keeps tokens in an owner-only directory at `0600`, persists a
   rotated refresh token before returning, and collapses concurrent refreshes within and across processes.
+- **Careful with personal data.** Error messages and body previews redact tokens, VINs and coordinates;
+  the types that hold tokens or a VIN print no secrets through `Debug`. A VIN is checked once when a
+  request is built: one that could escape its path segment (empty, or containing `/`, `\`, `:`, NUL or
+  `..`) is refused before anything is sent. The VIN's format itself is not checked.
+- **Careful with hosts.** The region URL Tesla returns is adopted only if it is `https` and its host is
+  on the allowlist (`TESLA_REGION_HOSTS` by default; `ClientBuilder::allow_region_host` adds to it).
+  Otherwise the client stays on its bootstrap host.
+- **No `unsafe`.** `unsafe_code = "forbid"` across the workspace, and product code is linted against
+  `unwrap` and `panic`.
+
+To see what each call costs without a token or a network connection:
+
+```sh
+cargo run --example pricing_table
+```
+
+```text
+GET                                           cost          scopes
+/api/1/vehicles/{vin}/vehicle_data            $0.002/call   vehicle_device_data
+/api/1/vehicles/{vin}/nearby_charging_sites   $0.002/call   vehicle_device_data
+/api/1/vehicles                               free          vehicle_device_data
+/api/1/vehicles/{vin}                         free          vehicle_device_data
+...
+2 of 16 endpoints are billed; 14 are free.
+```
 
 ## Quick start
 
@@ -101,11 +126,42 @@ The crate builds on Linux and macOS (CI runs on Linux).
    # }
    ```
 
+## Free calls
+
+Fourteen of the sixteen endpoints are not billed, so you can poll them without spending anything.
+Checking whether a car is awake, for example, uses the free `GET /api/1/vehicles/{vin}` and does not
+wake it:
+
+```rust,no_run
+use std::sync::Arc;
+use fleetwire::api::vehicles::GetVehicle;
+use fleetwire::{Client, HttpRefresher, Pricing, TokenManager};
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# let tokens = TokenManager::new(
+#     "/home/me/.fleetwire".into(),
+#     Arc::new(HttpRefresher::new("your-client-id".to_owned())),
+# );
+let client = Client::builder(tokens).build()?;
+let req = GetVehicle::new("YOUR_VIN")?;
+assert_eq!(fleetwire::FleetGet::pricing(&req), Pricing::NotCharged);
+let car = client.send(&req)?;
+println!("state {}", car.state.as_deref().unwrap_or("?"));
+# Ok(())
+# }
+```
+
+The other free ones include `ListVehicles`, `GetRecentAlerts`, `GetReleaseNotes`, `GetServiceData`,
+`ListDrivers` and, under `fleetwire::api::users`, `GetMe` and `GetRegion`; `pricing_table` lists them all.
+
 ## Calls that cost money
 
 Of the sixteen endpoints this crate models, two are billed: `GetVehicleData` and
 `GetNearbyChargingSites` (measured: $0.002 per request, and a 408 from a sleeping vehicle is billed too).
 The other fourteen are not.
+
+`examples/guarded_vehicle_data` shows the safe way to make a billed call: it reads the battery level
+through `Client::send_guarded`, which skips the billed request when the car is not online.
 
 | Entry point | What it does |
 |---|---|
