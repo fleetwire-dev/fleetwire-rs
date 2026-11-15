@@ -57,23 +57,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         row(&GetFeatureConfig),
     ];
     // Billed calls first, so they are the first thing a reader sees.
-    rows.sort_by_key(|r| r.usd.is_none());
+    rows.sort_by_key(|r| !matches!(r.cost, Cost::Billed(_)));
 
     let width = rows.iter().map(|r| r.path.len()).max().unwrap_or(0);
     println!("{:<width$}  {:<12}  scopes", "GET", "cost");
     for r in &rows {
-        let cost = r
-            .usd
-            .map_or_else(|| "free".to_owned(), |usd| format!("${usd}/call"));
+        let cost = match r.cost {
+            Cost::Billed(usd) => format!("${usd}/call"),
+            Cost::Free => "free".to_owned(),
+            Cost::Unknown => "unknown".to_owned(),
+        };
         println!("{:<width$}  {cost:<12}  {}", r.path, r.scopes);
     }
 
-    let billed = rows.iter().filter(|r| r.usd.is_some()).count();
+    let billed = rows
+        .iter()
+        .filter(|r| matches!(r.cost, Cost::Billed(_)))
+        .count();
+    let free = rows.iter().filter(|r| matches!(r.cost, Cost::Free)).count();
     println!();
     println!(
-        "{billed} of {} endpoints are billed; the other {} are free.",
-        rows.len(),
-        rows.len() - billed
+        "{billed} of {} endpoints are billed; {free} are free.",
+        rows.len()
     );
     println!(
         "Use Client::send_guarded for the billed ones: it checks for free that the car is online first."
@@ -83,20 +88,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Row {
     path: String,
-    usd: Option<f64>,
+    cost: Cost,
     scopes: String,
 }
 
+enum Cost {
+    Billed(f64),
+    Free,
+    Unknown,
+}
+
 fn row<R: FleetGet>(req: &R) -> Row {
-    let usd = match req.pricing() {
-        Pricing::Data { usd_per_request } => Some(usd_per_request),
-        // `Pricing` is non-exhaustive; anything not known to be billed is shown as free.
-        _ => None,
+    let cost = match req.pricing() {
+        Pricing::Data { usd_per_request } => Cost::Billed(usd_per_request),
+        Pricing::NotCharged => Cost::Free,
+        // `Pricing` is non-exhaustive; a category this example does not know is not shown as free.
+        _ => Cost::Unknown,
     };
     Row {
         // Show the placeholder segment as `{vin}`, the way Tesla's docs write it.
         path: req.path().replace(PLACEHOLDER_VIN, "{vin}"),
-        usd,
+        cost,
         scopes: scopes(&req.required_scopes()),
     }
 }

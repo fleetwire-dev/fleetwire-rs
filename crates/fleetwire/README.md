@@ -15,9 +15,11 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
   rotated refresh token before returning, and collapses concurrent refreshes within and across processes.
 - **Careful with personal data.** Error messages and body previews redact tokens, VINs and coordinates;
   the types that hold tokens or a VIN print no secrets through `Debug`. A VIN is checked once when a
-  request is built, so a malformed one never reaches the network.
-- **Careful with hosts.** The client adopts the region host Tesla returns only if it is on a fixed
-  allowlist (`TESLA_REGION_HOSTS`), so a bearer token is never sent to an unexpected host.
+  request is built: one that could escape its path segment (empty, or containing `/`, `\`, `:`, NUL or
+  `..`) is refused before anything is sent. The VIN's format itself is not checked.
+- **Careful with hosts.** The region URL Tesla returns is adopted only if it is `https` and its host is
+  on the allowlist (`TESLA_REGION_HOSTS` by default; `ClientBuilder::allow_region_host` adds to it).
+  Otherwise the client stays on its bootstrap host.
 - **No `unsafe`.** `unsafe_code = "forbid"` across the workspace, and product code is linted against
   `unwrap` and `panic`.
 
@@ -34,7 +36,7 @@ GET                                           cost          scopes
 /api/1/vehicles                               free          vehicle_device_data
 /api/1/vehicles/{vin}                         free          vehicle_device_data
 ...
-2 of 16 endpoints are billed; the other 14 are free.
+2 of 16 endpoints are billed; 14 are free.
 ```
 
 ## Quick start
