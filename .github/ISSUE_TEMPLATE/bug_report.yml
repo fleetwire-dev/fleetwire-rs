@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: fleetwire version and Rust version
-      placeholder: fleetwire 0.1.0, rustc 1.89.0
+      placeholder: fleetwire 0.2.0, rustc 1.89.0
     validations:
       required: true
   - type: textarea
