@@ -28,7 +28,8 @@
           { "context": "test 1.89.0" },
           { "context": "lint" },
           { "context": "supply-chain" },
-          { "context": "secrets" }
+          { "context": "secrets" },
+          { "context": "invariants" }
         ]
       }
     }

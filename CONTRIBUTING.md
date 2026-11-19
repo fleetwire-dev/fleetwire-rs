@@ -2,6 +2,10 @@
 
 Thanks for looking. This is a small, solo-maintained library, so the scope is kept narrow on purpose.
 
+The crate sources are exported from a private workspace (see "Where this comes from" in the README).
+A change you send here is re-applied there by the maintainer, so smaller pull requests land faster.
+Coding agents: read [AGENTS.md](AGENTS.md) first.
+
 ## What fits, and what does not
 
 Welcome:
@@ -22,8 +26,13 @@ If you are unsure, open an issue before writing code.
 
 ## Development
 
-The four commands in the README's "Development" section are what CI runs; run them before opening a
+The commands in the README's "Development" section are what CI runs; run them before opening a
 pull request. `cargo deny check` and gitleaks also run in CI.
+
+`scripts/check_invariants.py` holds the invariant gates: short checks that the properties the README
+promises (GET only, two billed endpoints, no default retry, one HTTP agent, no `Debug` on secrets)
+still hold in the source. If one fails, `--list` prints why the rule exists. A gate is changed only
+together with its self-test.
 
 - Changes land through pull requests; `main` is protected and all CI jobs must pass.
 - Tests should prove an invariant and fail when the guard they cover is removed.
@@ -31,9 +40,8 @@ pull request. `cargo deny check` and gitleaks also run in CI.
 
 ## Language
 
-Public documentation (`///`, `//!`, READMEs) is in English. Many internal `//` comments are in Korean,
-the maintainer's working language; you do not need to translate them, and new comments may be in
-English.
+Comments and documentation are in English, without emoji. The `comment-language` gate checks it.
+Text inside a string literal is not a comment: a test may feed any input it needs.
 
 ## Commits
 
