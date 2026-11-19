@@ -22,9 +22,9 @@ impl FleetGet for GetRegion {
     passthrough_endpoint!(GetRegion, RegionInfo);
 
     fn required_scopes(&self) -> ScopeExpr {
-        // O1 실측: region 조회는 스코프에 유연하다 — 실측 토큰의 scp
-        // (openid·offline_access·vehicle_device_data·vehicle_location) 중
-        // 모델링된 어느 하나만 있어도 통과시킨다.
+        // O1 measurement: the region lookup is lenient about scopes. Any single modeled scope
+        // out of the measured token's scp (openid, offline_access, vehicle_device_data,
+        // vehicle_location) is enough to pass.
         ScopeExpr::Any(vec![
             ScopeExpr::One(Scope::Openid),
             ScopeExpr::One(Scope::UserData),
@@ -266,7 +266,7 @@ mod tests {
     /// (design §10.2, article 1).
     #[test]
     fn orders_requires_vehicle_device_data_while_me_and_feature_config_require_user_data() {
-        // (엔드포인트, 만족시켜야 하는 스코프, 만족시키면 **안 되는** 스코프)
+        // (endpoint, the scope that must satisfy it, the scope that must **not** satisfy it)
         let cases = [
             {
                 let r = GetMe;
@@ -284,7 +284,7 @@ mod tests {
                     r.path(),
                     r.required_scopes(),
                     r.pricing(),
-                    // 실측: user_data 없는 토큰으로 200 이었다.
+                    // Measured: a token without user_data got 200.
                     Scope::VehicleDeviceData,
                     Scope::UserData,
                 )
@@ -305,18 +305,18 @@ mod tests {
             assert!(matches!(pricing, Pricing::NotCharged), "{path}");
             assert!(
                 scopes.is_satisfied_by(&[wanted]),
-                "{path}: {wanted:?} 하나로 만족돼야 한다"
+                "{path}: should be satisfied by {wanted:?} alone"
             );
             assert!(
                 !scopes.is_satisfied_by(&[rejected]),
-                "{path}: {rejected:?} 로 만족되면 안 된다 — \
-                 세 엔드포인트를 한 덩어리로 묶던 회귀다"
+                "{path}: should not be satisfied by {rejected:?} — \
+                 this is the regression that grouped the three endpoints together"
             );
-            // 셋 다 `openid` 만으로는 만족되지 않는다(O1 정정 4번) — `GetRegion`
-            // 과 갈라지는 지점이라 스코프가 어느 쪽이든 유지돼야 한다.
+            // None of the three is satisfied by `openid` alone (O1 correction no. 4). This is
+            // where they part from `GetRegion`, so it has to hold whichever scope they declare.
             assert!(
                 !scopes.is_satisfied_by(&[Scope::Openid]),
-                "{path}: openid 만으로 만족되면 안 된다(O1 정정 4번)"
+                "{path}: should not be satisfied by openid alone (O1 correction no. 4)"
             );
         }
     }

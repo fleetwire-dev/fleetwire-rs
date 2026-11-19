@@ -380,7 +380,7 @@ mod tests {
             txid: None,
         };
         assert_eq!(ok.billing(), Billing::Billed); // Data 408 = billed
-        assert!(!ok.is_retryable()); // 408 재시도 금지
+        assert!(!ok.is_retryable()); // 408 must not be retried
     }
 
     #[test]

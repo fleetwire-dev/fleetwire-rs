@@ -277,7 +277,7 @@ mod test_support;
 mod transport;
 
 // Crate-root re-exports of the types callers touch on nearly every call
-// (design §2's module map: `lib.rs # 공개 re-export`). Final fix wave (F11):
+// (design §2's module map: `lib.rs # public re-export`). Final fix wave (F11):
 // there were none, so the shortest way to name the error type was
 // `fleetwire::error::Error`. The module paths remain public, so both spellings
 // work; these are the canonical ones.
@@ -335,8 +335,9 @@ mod readonly_guard_tests {
     #[test]
     fn clippy_toml_forbids_every_mutating_method() {
         let active = active_content(include_str!("../clippy.toml"));
-        // GET 이 아닌 메서드는 Agent 메서드·자유 함수 둘 다, `net::agent` 를 거치지 않는 Agent·요청 경로도
-        // 함께 막습니다(ureq 3.3.0 의 agent.rs·lib.rs·config.rs·request_ext.rs 전수, 최종 검토 M-2).
+        // Non-GET methods are blocked both as Agent methods and as free functions, together
+        // with the Agent and request paths that do not go through `net::agent` (every one in
+        // ureq 3.3.0's agent.rs, lib.rs, config.rs and request_ext.rs; final review M-2).
         for m in [
             "ureq::Agent::post",
             "ureq::Agent::put",
@@ -366,7 +367,7 @@ mod readonly_guard_tests {
         ] {
             assert!(
                 active.contains(m),
-                "clippy.toml 에 {m} 금지 항목이 없다(주석 처리됨 포함)"
+                "clippy.toml has no entry forbidding {m} (a commented-out entry counts as missing)"
             );
         }
     }

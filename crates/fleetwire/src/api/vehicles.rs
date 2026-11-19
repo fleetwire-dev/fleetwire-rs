@@ -647,12 +647,12 @@ mod tests {
             per_page: Some(50),
         };
         assert_eq!(r.path(), "/api/1/vehicles");
-        // O1: 16개 중 유료는 vehicle_data·nearby_charging_sites 뿐이다.
+        // O1: of the 16, only vehicle_data and nearby_charging_sites are paid.
         assert!(matches!(r.pricing(), Pricing::NotCharged));
         let q = r.query().to_encoded();
         assert!(
             q.contains("page=2") && q.contains("per_page=50"),
-            "실제: {q}"
+            "actual: {q}"
         );
     }
 
@@ -662,7 +662,11 @@ mod tests {
             page: None,
             per_page: None,
         };
-        assert_eq!(r.query().to_encoded(), "", "없는 파라미터를 보내면 안 된다");
+        assert_eq!(
+            r.query().to_encoded(),
+            "",
+            "an absent parameter should not be sent"
+        );
     }
 
     /// When only one side is present, the absent side must still be left out — looking only
@@ -687,7 +691,7 @@ mod tests {
     #[test]
     fn get_vehicle_encodes_vin_segment() {
         let r = GetVehicle::new("5YJ3E1EA7KF000000").unwrap();
-        assert!(!r.path().contains("/../"), "실제: {}", r.path());
+        assert!(!r.path().contains("/../"), "actual: {}", r.path());
         assert_eq!(r.vin(), "5YJ3E1EA7KF000000");
     }
 
@@ -716,7 +720,7 @@ mod tests {
             !with
                 .required_scopes()
                 .is_satisfied_by(&[Scope::VehicleDeviceData]),
-            "위치를 요청했는데 device_data 만으로 만족되면 안 된다"
+            "location was requested, so device_data alone should not satisfy it"
         );
     }
 
@@ -737,8 +741,8 @@ mod tests {
     fn location_data_is_absent_from_the_query_unless_asked() {
         let r = GetVehicleData::new("5YJ3E1EA1JF000001", vec![DataEndpoint::ChargeState]).unwrap();
         let q = r.query().to_encoded();
-        assert!(!q.contains("location_data"), "실제: {q}");
-        assert!(q.contains("charge_state"), "실제: {q}");
+        assert!(!q.contains("location_data"), "actual: {q}");
+        assert!(q.contains("charge_state"), "actual: {q}");
     }
 
     /// It is paid. Misclassifying it throws the billing report off.
@@ -799,12 +803,9 @@ mod tests {
         let q = r.query().to_encoded();
         assert!(
             q.contains("count=5") && q.contains("radius=20") && q.contains("detail=true"),
-            "실제: {q}"
+            "actual: {q}"
         );
-        assert!(
-            !q.contains("page"),
-            "이 엔드포인트는 page 를 쓰지 않는다: {q}"
-        );
+        assert!(!q.contains("page"), "this endpoint does not use page: {q}");
     }
 
     #[test]
@@ -850,7 +851,7 @@ mod tests {
         let q = r.query().to_encoded();
         assert!(
             q.contains("page=2") && q.contains("per_page=25"),
-            "실제: {q}"
+            "actual: {q}"
         );
     }
 
@@ -884,7 +885,7 @@ mod tests {
         assert_eq!(
             page.pagination.as_ref().and_then(|p| p.next),
             Some(2),
-            "assemble 이 pagination 을 버리면 안 된다"
+            "assemble should not drop the pagination"
         );
     }
 
@@ -977,17 +978,17 @@ mod tests {
         ];
         assert_eq!(cases.len(), expected_paths.len());
         for ((path, scopes, pricing, query), suffix) in cases.iter().zip(expected_paths) {
-            assert!(path.ends_with(suffix), "경로 불일치: {path} vs {suffix}");
+            assert!(path.ends_with(suffix), "path mismatch: {path} vs {suffix}");
             assert!(path.starts_with("/api/1/vehicles/"), "{path}");
             assert!(
                 matches!(pricing, Pricing::NotCharged),
-                "{suffix} 는 무과금이어야 한다"
+                "{suffix} should be free of charge"
             );
             assert!(
                 scopes.is_satisfied_by(&[Scope::VehicleDeviceData]),
                 "{suffix}"
             );
-            assert_eq!(query, "", "{suffix} 는 파라미터가 없다");
+            assert_eq!(query, "", "{suffix} has no parameters");
         }
     }
 
@@ -1037,12 +1038,12 @@ mod tests {
         assert_eq!(
             r.path(),
             "/api/1/vehicles/5YJ%252Fsecrets/fleet_telemetry_errors",
-            "실제: {}",
+            "actual: {}",
             r.path()
         );
         assert!(
             !r.path().contains("5YJ%2Fsecrets/fleet"),
-            "실제: {}",
+            "actual: {}",
             r.path()
         );
     }

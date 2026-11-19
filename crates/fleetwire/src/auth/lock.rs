@@ -69,17 +69,19 @@ pub(crate) struct LockGuard {
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        // 실패해도 할 수 있는 일이 없다. 프로세스가 죽으면 커널이 어차피 해제한다.
-        // 언와인딩 중에도 이 Drop 은 실행된다 — 패닉한 프로세스가 락을 쥔 채
-        // 남지 않는다(`the_lock_is_released_when_the_guard_drops_during_a_panic`).
+        // Nothing can be done if this fails. If the process dies the kernel releases the
+        // lock anyway. This Drop also runs during unwinding — a process that panicked does
+        // not stay behind holding the lock
+        // (`the_lock_is_released_when_the_guard_drops_during_a_panic`).
         //
-        // **이 한 줄은 현재 구조에서는 없어도 동작이 같다.** 가드가 `File` 을
-        // 소유하므로, 이 줄이 없어도 바로 뒤에서 `File` 이 drop 되며 `close(2)` 가
-        // 열린 파일 서술자를 회수하고 커널이 flock 을 푼다. 실제로 이 줄을 지우는
-        // 변이는 어떤 테스트도 깨뜨리지 않는다(등가 변이) — 테스트가 부실해서가
-        // 아니라 `unlock()` 과 `close()` 사이에 관측 가능한 순간이 없어서다.
-        // 그래도 남겨 두는 이유: 나중에 이 가드가 `File` 을 `try_clone`/공유하도록
-        // 바뀌면 close 만으로는 안 풀리고, 그때 해제 시점이 명시적이어야 한다.
+        // **In the current structure, behaviour is the same without this one line.** The
+        // guard owns the `File`, so even without this line the `File` is dropped right
+        // after, `close(2)` reclaims the open file descriptor and the kernel releases the
+        // flock. In fact a mutation that deletes this line breaks no test (an equivalent
+        // mutation) — not because the tests are weak but because there is no observable
+        // moment between `unlock()` and `close()`. The reason it is kept anyway: if this
+        // guard is later changed to `try_clone`/share the `File`, close alone will not
+        // release the lock, and at that point the moment of release has to be explicit.
         let _ = File::unlock(&self.file);
     }
 }
@@ -111,19 +113,19 @@ pub(crate) fn acquire(path: &Path, deadline: Duration) -> Result<LockGuard, Lock
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        // `create_dir_all` 이 아니라 `DirBuilder::mode(0o700)` 이다. 락 파일은
-        // 토큰과 **같은 디렉터리**에 있으므로(`TokenStore::lock_path`), 여기서
-        // umask 를 먹은 0755 로 디렉터리를 만들면 그 뒤의 모든
-        // `TokenStore::store`/`load` 가 `BadDirPermissions` 로 영구히 실패한다.
-        // 설계 §4 의 `~/.fleetwire/ 0700` 을 이 경로에서도 지킨다.
+        // This is `DirBuilder::mode(0o700)`, not `create_dir_all`. The lock file lives in
+        // the **same directory** as the tokens (`TokenStore::lock_path`), so creating the
+        // directory here as 0755 (what the umask leaves) would make every later
+        // `TokenStore::store`/`load` fail permanently with `BadDirPermissions`.
+        // The `~/.fleetwire/ 0700` of design §4 is upheld on this path too.
         std::fs::DirBuilder::new()
             .recursive(true)
             .mode(0o700)
             .create(parent)?;
     }
-    // 고정 inode: 있으면 열고 없으면 만든다. `.mode(0o600)` 은 **새로 만들 때만**
-    // 적용된다(이미 있는 파일의 권한은 바꾸지 않는다 — 남의 파일 권한을 조용히
-    // 고치지 않는 것은 store.rs 와 같은 방침이다).
+    // Fixed inode: open it if it exists, create it if not. `.mode(0o600)` applies **only on
+    // creation** (the permissions of an existing file are not changed — not silently fixing
+    // the permissions of someone else's file is the same policy as store.rs).
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -156,17 +158,18 @@ where
     loop {
         match attempt() {
             Ok(()) => return Ok(()),
-            // 경합 — 재시도한다.
+            // Contention — retry.
             Err(TryLockError::WouldBlock) => {}
-            // 실제 입출력 오류 — 재시도해도 나아지지 않는다.
+            // A real I/O error — retrying will not make it better.
             Err(TryLockError::Error(e)) => return Err(LockError::Io(e)),
         }
         let elapsed = started.elapsed();
         if elapsed >= deadline {
             return Err(LockError::Timeout);
         }
-        // 남은 시간을 넘겨 자지 않는다 — deadline 초과폭을 최소화한다.
-        // 위 검사가 `elapsed < deadline` 을 보장하지만, 그 보장에 기대지 않고 뺄셈 자체가 넘치지 않게 합니다
+        // Never sleep past the remaining time — this keeps the overshoot of the deadline minimal.
+        // The check above guarantees `elapsed < deadline`, but instead of relying on that
+        // guarantee the subtraction itself is made unable to overflow
         // (clippy `unchecked_time_subtraction`, 10-14).
         std::thread::sleep(backoff.min(deadline.saturating_sub(elapsed)));
         backoff = (backoff * 2).min(LOCK_RETRY_MAX);

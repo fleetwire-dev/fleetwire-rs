@@ -5,12 +5,12 @@ use fleetwire_testkit::{Mock, MockServer, ResponseTemplate};
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-/// 리다이렉트를 따르지 않는 프로덕션 Agent 설정 그대로입니다(`net::agent`).
+/// Exactly the production Agent config, which does not follow redirects (`net::agent`).
 fn client() -> ureq::Agent {
     crate::net::agent(std::time::Duration::from_secs(10))
 }
 
-/// 200 + JSON 이 그대로 실려 온다. Authorization 헤더가 붙는다.
+/// A 200 + JSON comes back as it is. The Authorization header is attached.
 #[test]
 fn get_carries_bearer_and_returns_body() {
     let server = MockServer::start();
@@ -38,8 +38,8 @@ fn get_carries_bearer_and_returns_body() {
     assert_eq!(r.content_type.as_deref(), Some("application/json"));
 }
 
-/// 실측 E1 케이스 B — 401 + text/html + 0바이트 + WWW-Authenticate.
-/// 헤더가 보존돼야 T3 가 error_description 을 꺼낼 수 있다.
+/// Measured E1 case B — 401 + text/html + 0 bytes + WWW-Authenticate.
+/// The header has to be preserved for T3 to be able to pull out the error_description.
 #[test]
 fn preserves_www_authenticate_on_empty_html_401() {
     let server = MockServer::start();
@@ -66,7 +66,7 @@ fn preserves_www_authenticate_on_empty_html_401() {
     .unwrap();
 
     assert_eq!(r.status.as_u16(), 401);
-    assert!(r.body.is_empty(), "실측상 body 는 0바이트여야 한다");
+    assert!(r.body.is_empty(), "as measured, the body should be 0 bytes");
     assert!(
         r.www_authenticate
             .unwrap()
@@ -74,7 +74,7 @@ fn preserves_www_authenticate_on_empty_html_401() {
     );
 }
 
-/// Retry-After 의 delta-seconds 형식.
+/// The delta-seconds form of Retry-After.
 #[test]
 fn parses_retry_after_delta_seconds() {
     let server = MockServer::start();
@@ -99,20 +99,20 @@ fn parses_retry_after_delta_seconds() {
     assert_eq!(r.retry_after, Some(std::time::Duration::from_secs(30)));
 }
 
-/// RFC 9110 은 Retry-After 에 HTTP-date 도 허용한다.
-/// 빠뜨리면 조용히 None 이 되어 상한이 무의미해진다.
+/// RFC 9110 also allows an HTTP-date in Retry-After.
+/// If it were left out, the result would silently become None and the cap would be meaningless.
 #[test]
 fn parses_retry_after_http_date() {
-    // 과거 시각 → 0초(음수로 만들지 않는다).
+    // A time in the past -> 0 seconds (it is not made negative).
     assert_eq!(
         parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"),
         Some(std::time::Duration::ZERO)
     );
-    // 형식이 아니면 None.
+    // None when it is in neither form.
     assert_eq!(parse_retry_after("not-a-date"), None);
 }
 
-/// 3xx 는 decode 의 `>=400` 에 안 걸려 Decode 로 샌다. transport 가 막는다.
+/// A 3xx is not caught by decode's `>=400` and leaks out as Decode. The transport stops it.
 #[test]
 fn redirect_status_becomes_api_error_not_decode() {
     let server = MockServer::start();
@@ -132,12 +132,13 @@ fn redirect_status_becomes_api_error_not_decode() {
 
     assert!(
         matches!(err, crate::error::Error::Api { status, .. } if status.as_u16() == 302),
-        "실제: {err:?}"
+        "actual: {err:?}"
     );
 }
 
-/// 크기 상한은 **누적 중** 끊겨야 한다 — buffer-then-check 금지(design §9).
-/// 판별 방법: 상한보다 훨씬 큰 body 를 주고, 반환된 에러가 크기 초과인지 본다.
+/// The size cap must cut the read off **while accumulating** — buffer-then-check is forbidden
+/// (design §9). How it is told apart: give a body far larger than the cap and see whether the
+/// returned error is the size overrun.
 #[test]
 fn aborts_while_streaming_when_body_exceeds_cap() {
     let server = MockServer::start();
@@ -157,13 +158,14 @@ fn aborts_while_streaming_when_body_exceeds_cap() {
     .unwrap_err();
 
     let msg = err.to_string();
-    assert!(msg.contains("response too large"), "실제: {msg}");
+    assert!(msg.contains("response too large"), "actual: {msg}");
 }
 
 // --- Fix round 1: M2 mechanism kill ------------------------------------
 
-/// 고정 크기 조각을 내놓으며 읽힌 횟수를 기록하는 리더입니다.
-/// buffer-then-check 라면 상한을 넘겨도 끝(`Ok(0)`)까지 다 읽어야 하므로 읽기 횟수가 더 많아집니다.
+/// A reader that hands out fixed-size chunks and records how many times it is read.
+/// With buffer-then-check, everything has to be read to the end (`Ok(0)`) even after the cap is
+/// crossed, so the read count becomes larger.
 struct CountingChunks {
     chunks: Vec<&'static [u8]>,
     idx: usize,
@@ -185,12 +187,14 @@ impl Read for CountingChunks {
     }
 }
 
-/// 결과 메시지만 보는 `aborts_while_streaming_when_body_exceeds_cap` 은
-/// buffer-then-check(M2)를 구별하지 못합니다. 이 시험은 **몇 번 읽혔는지**를 세어
-/// 매커니즘 자체를 확인합니다(규율 3: 값이 아니라 매커니즘을 단언하라).
+/// `aborts_while_streaming_when_body_exceeds_cap` looks only at the resulting message and
+/// cannot tell buffer-then-check (M2) apart. This test counts **how many times the reader was
+/// read** and so checks the mechanism itself (discipline 3: assert the mechanism, not the
+/// value).
 ///
-/// 5바이트 조각 4개(총 20바이트), 상한 10바이트: 누적 중 검사라면 셋째 조각에서 멈추므로
-/// 읽기 횟수는 정확히 3 입니다. buffer-then-check 라면 끝을 알리는 `Ok(0)` 까지 5 입니다.
+/// Four 5-byte chunks (20 bytes in total), cap 10 bytes: with a check while accumulating it
+/// stops at the third chunk, so the read count is exactly 3. With buffer-then-check it is 5, up
+/// to the `Ok(0)` that signals the end.
 #[test]
 fn accumulate_capped_stops_polling_once_cap_is_crossed() {
     let mut r = CountingChunks {
@@ -209,8 +213,8 @@ fn accumulate_capped_stops_polling_once_cap_is_crossed() {
 
 // --- Fix round 1: M1 boundary kill --------------------------------------
 
-/// 상한과 정확히 같은 크기는 통과하고, 1바이트만 넘으면 실패해야 합니다 — `>` 를 `>=` 로 바꾸는
-/// 뮤테이션(M1)은 앞의 절반을 뒤집습니다.
+/// A size exactly equal to the cap must pass, and just one byte over must fail — the mutation
+/// that changes `>` to `>=` (M1) flips the first half.
 #[test]
 fn accumulate_capped_exact_boundary_succeeds_one_byte_over_fails() {
     let max = 4usize;
@@ -226,10 +230,10 @@ fn accumulate_capped_exact_boundary_succeeds_one_byte_over_fails() {
 
 // --- Fix round 1: M4 kill + redact_transport_error coverage ------------
 
-/// 아직 아무도 쓰지 않는 포트를 얻는다: 포트 0 으로 바인드해서 OS 가 배정한
-/// 포트 번호를 읽고, 리스너를 즉시 drop 한다. 그 포트로의 연결은
-/// connection-refused 로 확정 실패한다 — 플랫폼에 의존하는 예약 포트(예:
-/// TCP 포트 1)를 하드코딩하는 것보다 결정적이다.
+/// Gets a port nobody is using yet: binds to port 0, reads the port number the OS
+/// assigned and drops the listener at once. A connection to that port is certain to
+/// fail with connection-refused — this is more deterministic than hardcoding a
+/// platform-dependent reserved port (for example TCP port 1).
 fn unused_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -237,11 +241,12 @@ fn unused_port() -> u16 {
     port
 }
 
-/// M4: `e.is_connect()` 분기가 뒤집히면(예: `!e.is_connect()`) 이 테스트가
-/// 죽는다. connect 실패는 `TransportNotSent`(재시도 가능·비과금 확정)여야
-/// 하고, 절대 `TransportUnknown`(재시도 금지)이 되면 안 된다 — 뒤집히면
-/// "이미 서버가 처리했을 수도 있다"는 잘못된 가정 아래 영원히 재시도되지
-/// 않을 요청을, 사실은 재시도해도 안전한데 재시도 금지로 분류하게 된다.
+/// M4: if the `e.is_connect()` branch is flipped (for example `!e.is_connect()`), this
+/// test dies. A connect failure must be `TransportNotSent` (retryable, certainly not
+/// billed) and must never become `TransportUnknown` (must not be retried) — flipped, a
+/// request that is in fact safe to retry would be classified as not retryable, and so
+/// never retried, under the wrong assumption that "the server may already have processed
+/// it".
 #[test]
 fn connect_failure_is_transport_not_sent_not_unknown() {
     let port = unused_port();
@@ -262,10 +267,12 @@ fn connect_failure_is_transport_not_sent_not_unknown() {
     }
 }
 
-/// 연결 실패 픽스처로 진짜 오류를 만들고, URL 경로에 심은 VIN 이 메시지에 살아남지 않는지 봅니다(REQ-18).
+/// Makes a real error with the connect-failure fixture and checks that the VIN planted in the
+/// URL path does not survive in the message (REQ-18).
 ///
-/// ureq 의 연결 오류 문구에는 URL 이 들어가지 않으므로 여기서는 「새지 않음」만 단언합니다.
-/// URL 이 든 오류가 실제로 지워지는지는 `ureq_error_with_url_is_redacted` 가 봅니다.
+/// ureq's connection error text does not include the URL, so only "does not leak" is asserted
+/// here. Whether an error that carries a URL is actually scrubbed is checked by
+/// `ureq_error_with_url_is_redacted`.
 #[test]
 fn connect_error_message_does_not_leak_vin_from_url() {
     let port = unused_port();
@@ -290,7 +297,8 @@ fn connect_error_message_does_not_leak_vin_from_url() {
     );
 }
 
-/// URL 을 담은 ureq 오류(`BadUri`)가 VIN·질의를 지운 채 나가는지 봅니다(REQ-18).
+/// Checks that a ureq error that carries a URL (`BadUri`) goes out with the VIN and the query
+/// removed (REQ-18).
 #[test]
 fn ureq_error_with_url_is_redacted() {
     let vin = "5YJ3E1EA7KF000000";
@@ -303,7 +311,8 @@ fn ureq_error_with_url_is_redacted() {
     assert!(!msg.contains("location_data"), "query leaked: {msg}");
 }
 
-/// 헤더 뒤 본문 중간에 끊기면 서버가 이미 처리했으므로 Unknown 이어야 합니다(재시도 금지).
+/// When the connection is cut in the middle of the body after the headers, the server has
+/// already processed the request, so it must be Unknown (must not be retried).
 #[test]
 fn get_cut_mid_body_is_unknown() {
     let server = MockServer::start();
@@ -329,8 +338,10 @@ fn get_cut_mid_body_is_unknown() {
     );
 }
 
-/// 본문을 1바이트씩 흘리는 서버는 `request_timeout` + 1초 안에 Unknown 으로 끝나야 합니다(스펙 §0 C1).
-/// 음성 대조: `read_capped` 의 마감 검사를 지우면 ureq 가 읽을 때마다 마감을 1초씩 늘려 수십 초 붙잡힙니다.
+/// A server that trickles the body one byte at a time must end as Unknown within
+/// `request_timeout` + 1 second (spec §0 C1).
+/// Negative control: with the deadline check in `read_capped` removed, ureq extends the deadline
+/// by 1 second on every read and the call is held for tens of seconds.
 #[test]
 fn get_trickling_body_times_out_as_unknown() {
     let server = MockServer::start();

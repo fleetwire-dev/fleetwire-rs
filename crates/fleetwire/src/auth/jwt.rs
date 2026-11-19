@@ -62,10 +62,10 @@ pub(crate) enum UnverifiedScopeObservation {
 /// is kept in one place so that [`observe_scopes`] and [`observe_forbidden`] use the same
 /// rules.
 fn scp_items(access_token: &str) -> Option<Vec<String>> {
-    // compact JWS 는 정확히 3 세그먼트다. 그 외는 판단하지 않는다 — 2 세그먼트도,
-    // 4 세그먼트(payload 안의 유실된 점, 혹은 5 세그먼트 JWE 의 조각)도 마찬가지다.
-    // 마지막 `None` 바인딩이 "4번째가 없어야 한다" 를 강제한다. 이것이 없으면
-    // `a.b.c.d` 의 `b` 를 payload 로 오독하게 된다.
+    // A compact JWS has exactly 3 segments. Anything else is not judged — 2 segments, and
+    // equally 4 segments (a stray dot inside the payload, or a fragment of a 5-segment JWE).
+    // The final `None` binding enforces "there must be no 4th". Without it, the `b` of
+    // `a.b.c.d` would be misread as the payload.
     let mut parts = access_token.split('.');
     let (Some(_header), Some(payload_b64), Some(_sig), None) =
         (parts.next(), parts.next(), parts.next(), parts.next())
@@ -73,8 +73,9 @@ fn scp_items(access_token: &str) -> Option<Vec<String>> {
         return None;
     };
 
-    // 디코드 **전에** 상한을 본다 — 호출자가 준 문자열 길이만큼 버퍼를 잡지 않기
-    // 위해서다. base64 는 3/4 로 줄어드니 이 검사를 통과한 payload 는 6144B 이하다.
+    // The bound is checked **before** decoding — so as not to allocate a buffer as long as
+    // the string the caller gave. base64 shrinks to 3/4, so a payload that passes this check
+    // is at most 6144B.
     if payload_b64.len() > MAX_JWT_PAYLOAD_BYTES {
         return None;
     }
@@ -83,51 +84,57 @@ fn scp_items(access_token: &str) -> Option<Vec<String>> {
     let Ok(payload) = engine.decode(payload_b64) else {
         return None;
     };
-    // 디코드 결과 길이는 **불변식이지 검사가 아니다**. 위 인코딩 상한이
-    // `payload_b64.len() <= MAX` 를 보장하고 URL_SAFE_NO_PAD 는 n 글자를
-    // `floor(n*3/4)` 바이트로 디코드하므로 여기 도달한 payload 는 최대 6144B 다.
+    // The decoded length is **an invariant, not a check**. The encoding bound above
+    // guarantees `payload_b64.len() <= MAX`, and URL_SAFE_NO_PAD decodes n characters into
+    // `floor(n*3/4)` bytes, so a payload that reaches here is at most 6144B.
     //
-    // 이 관계는 **상수를 바꿔도 깨지지 않는다** — 두 검사가 같은 상수를 읽기
-    // 때문에 `MAX_JWT_PAYLOAD_BYTES` 를 올리면 인코딩 게이트도 같이 올라간다.
-    // 따라서 여기에 런타임 분기(`if ... { return Indeterminate }`)를 두면 어떤
-    // 입력으로도 도달할 수 없는 죽은 가지가 된다. 불변식이 실제로 깨지려면
-    // (a) 인코딩 쪽에 **별도의** 상수가 생기거나 (b) 팽창률이 4/3 을 넘는 디코더로
-    // 갈아타야 한다. 그 둘은 조용히 Indeterminate 로 흘리는 것보다 테스트에서
-    // 시끄럽게 깨지는 편이 낫다 — 그래서 분기가 아니라 `debug_assert!` 다.
+    // This relation **does not break even if the constant is changed** — both checks read
+    // the same constant, so raising `MAX_JWT_PAYLOAD_BYTES` raises the encoding gate along
+    // with it. A runtime branch here (`if ... { return Indeterminate }`) would therefore be
+    // a dead branch that no input can reach. For the invariant to actually break, either
+    // (a) a **separate** constant would have to appear on the encoding side or (b) the
+    // decoder would have to be swapped for one whose expansion ratio exceeds 4/3. It is
+    // better for those two to break loudly in a test than to be quietly passed off as
+    // Indeterminate — hence a `debug_assert!`, not a branch.
     debug_assert!(
         payload.len() <= MAX_JWT_PAYLOAD_BYTES,
-        "인코딩 상한이 디코딩 길이를 함의한다는 불변식이 깨졌다"
+        "the invariant that the encoding bound implies the decoded length is broken"
     );
-    // 이 early return 을 `.unwrap_or(Value::Null)` 로 바꾸지 말 것. 지금은
-    // `value` 를 `scp` 하나에만 쓰므로 `Null.get("scp") == None` 덕에 결과가 같지만,
-    // `exp`/`aud` 등 두 번째 클레임을 읽는 순간 등가성이 깨진다 — 파싱 실패한 토큰이
-    // "모든 클레임이 부재한 토큰" 으로 둔갑해 클레임별로 다른 판정을 낳는다.
+    // Do not change this early return into `.unwrap_or(Value::Null)`. For now `value` is
+    // used for `scp` alone, so the result is the same thanks to `Null.get("scp") == None`,
+    // but the equivalence breaks the moment a second claim such as `exp`/`aud` is read — a
+    // token that failed to parse turns into "a token with every claim absent" and yields a
+    // different verdict per claim.
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&payload) else {
         return None;
     };
 
-    // scp 는 문자열 배열이어야 한다(2026-07-31 실측). 그 외 형태는 판단하지 않는다.
-    // 특히 **클레임 부재를 "스코프 없음" 으로 읽지 않는다** — 발급자 프로필이
-    // "부재 = 스코프 없음" 을 명시할 때만 그렇게 볼 수 있고, 우리는 그 명시가 없다.
+    // scp must be an array of strings (measured 2026-07-31). Any other shape is not judged.
+    // In particular, **an absent claim is not read as "no scopes"** — it can be seen that
+    // way only when the issuer profile states "absent = no scopes", and we have no such
+    // statement.
     let items = value.get("scp").and_then(serde_json::Value::as_array)?;
-    // **빈 배열도 부재와 같이 Indeterminate 다.** 이 기능의 권한은 "요구 스코프가
-    // 콕 집어 없을 때 건너뛴다" 뿐이고, 퇴화한 클레임 모양을 해석할 권한은 없다.
-    // `[]` 는 부재와 같은 종류로 퇴화해 있다 — 스코프가 하나도 없는 OAuth 토큰을
-    // 일부러 발급하는 사람은 없으므로, 이건 발급자의 진술이 아니라 상류 이상 신호다.
+    // **An empty array is Indeterminate too, like an absent claim.** The only authority this
+    // feature has is "skip when the required scope is specifically absent"; it has no
+    // authority to interpret a degenerate claim shape. `[]` is degenerate in the same way as
+    // absence — nobody issues an OAuth token with no scopes at all on purpose, so this is
+    // not a statement by the issuer but a sign of an upstream anomaly.
     //
-    // 오류 비용이 비대칭이라는 점이 결정적이다. 잘못된 skip 은 **네트워크 호출도
-    // 서버 응답도 없이** 우리가 검증되지 않은 클레임으로 지어낸 `MissingScope` 를
-    // 사용자에게 던진다 — 확인할 방법이 없다. 잘못된 Indeterminate 는 요청 한 번과
-    // 읽을 수 있는 403(과금 엔드포인트면 ~$0.002)이 전부다.
+    // What is decisive is that the cost of an error is asymmetric. A wrong skip throws at
+    // the user a `MissingScope` that we fabricated from an unverified claim, **with no
+    // network call and no server response** — there is no way to check it. A wrong
+    // Indeterminate costs no more than one request and a readable 403 (~$0.002 on a billed
+    // endpoint).
     //
-    // `["openid"]` 는 다르다. 그건 발급자가 **우리 것을 제외한 스코프 집합을 진술한**
-    // 것이고, `DoesNotContainRequiredScope` 는 정확히 그 경우를 위한 값이다.
+    // `["openid"]` is different. There the issuer has **stated a set of scopes that excludes
+    // ours**, and `DoesNotContainRequiredScope` is the value for exactly that case.
     if items.is_empty() {
         return None;
     }
-    // `any(!is_string)` 이다 — `all` 이 아니다. 하나라도 문자열이 아니면 그 배열의
-    // 의미를 모른다. `["vehicle_device_data", 1]` 처럼 섞인 배열에서 문자열만
-    // 골라 읽으면, 우리가 이해하지 못한 구조를 이해한 척하는 것이 된다.
+    // This is `any(!is_string)` — not `all`. If even one element is not a string, the meaning
+    // of the array is unknown. Picking only the strings out of a mixed array such as
+    // `["vehicle_device_data", 1]` would be pretending to understand a structure we did not
+    // understand.
     if items.iter().any(|v| !v.is_string()) {
         return None;
     }
@@ -158,16 +165,19 @@ pub(crate) fn observe_scopes(
         return Indeterminate;
     };
 
-    // 모델링되지 않은 스코프(예: offline_access)는 버린다. 요구 스코프는 항상
-    // 우리 엔드포인트 타입에서 오므로 알려진 값이고, 미지 항목을 버려도 판정이 틀리지 않는다.
+    // Unmodeled scopes (e.g. offline_access) are dropped. The required scopes always come
+    // from our endpoint types and so are known values, and dropping unknown items does not
+    // make the verdict wrong.
     //
-    // 여기가 원소 **타입**에는 엄격(비문자열 하나면 Indeterminate)하면서 스코프
-    // **값**에는 관대한 비대칭 지점이다. 이 관대함은 증거가 강제한 것이다 —
-    // `offline_access` 를 버리지 못하면 실 토큰 전부가 Indeterminate 로 무너져
-    // 기능이 죽는다. 대가로 치르는 실패 모드를 적어 둔다: **Tesla 가 모델링된
-    // 스코프를 개명하거나 별칭을 주면, 여전히 부여된 권한이 조용히 잘못된 skip 이
-    // 된다.** (`vehicle_device_data` → 새 이름이면 held 에서 사라져 요구를 못 만족.)
-    // 스코프 이름이 바뀌었다는 신호가 오면 `Scope::from_str` 을 먼저 갱신할 것.
+    // This is the point of asymmetry: strict about the **type** of the elements (a single
+    // non-string means Indeterminate) while lenient about the scope **values**. That
+    // leniency was forced by the evidence — if `offline_access` could not be dropped, every
+    // real token would collapse into Indeterminate and the feature would be dead. The
+    // failure mode paid as the price is noted here: **if Tesla renames a modeled scope or
+    // gives it an alias, a permission that is still granted silently becomes a wrong skip.**
+    // (If `vehicle_device_data` gets a new name, it disappears from held and the requirement
+    // cannot be satisfied.) When a sign arrives that a scope name has changed, update
+    // `Scope::from_str` first.
     let held: Vec<Scope> = items
         .iter()
         .filter_map(|s| Scope::from_str(s).ok())
@@ -206,9 +216,9 @@ pub(crate) fn observe_forbidden(access_token: &str) -> UnverifiedScopeObservatio
 
 #[cfg(test)]
 mod tests {
-    // `use base64::Engine as _;` 를 여기 두지 않는다 — `use super::*` 가 모듈의
-    // 같은 import 를 이미 끌어오므로 중복이 되고, 이 크레이트는 `-D warnings` 라
-    // `unused_imports` 가 곧 빌드 실패다.
+    // `use base64::Engine as _;` is not placed here — `use super::*` already pulls in the
+    // module's same import, so it would be a duplicate, and this crate builds with
+    // `-D warnings`, so `unused_imports` is a build failure.
     use super::*;
     use crate::scope::{Scope, ScopeExpr};
 
@@ -266,8 +276,8 @@ mod tests {
 
     #[test]
     fn real_tesla_scp_shape_is_recognized_including_unmodeled_scopes() {
-        // 2026-07-31 실측 토큰의 scp 그대로. offline_access 는 모델링돼 있지 않지만
-        // 그것 때문에 판정이 Indeterminate 로 무너지면 안 된다.
+        // The scp of the token measured on 2026-07-31, as is. offline_access is not modeled,
+        // but the verdict must not collapse into Indeterminate because of it.
         let token = jwt_with_payload(&serde_json::json!({
             "scp": ["offline_access", "openid", "vehicle_device_data", "vehicle_location"]
         }));
@@ -311,7 +321,7 @@ mod tests {
             assert_eq!(
                 observe_scopes(&token, &required_device_data()),
                 UnverifiedScopeObservation::Indeterminate,
-                "{label} 은 Indeterminate 여야 한다 — 요청을 막으면 fail-open 이 깨진다"
+                "{label} must be Indeterminate — blocking the request breaks fail-open"
             );
         }
     }
@@ -340,7 +350,7 @@ mod tests {
         let token = jwt_with_payload(&serde_json::json!({
             "scp": ["vehicle_device_data"]
         }));
-        // ScopeExpr::All 은 Vec<ScopeExpr> 를 받는다 — Vec<Scope> 가 아니다.
+        // ScopeExpr::All takes a Vec<ScopeExpr> — not a Vec<Scope>.
         let required = ScopeExpr::All(vec![
             ScopeExpr::One(Scope::VehicleDeviceData),
             ScopeExpr::One(Scope::VehicleLocation),
@@ -365,7 +375,8 @@ mod tests {
             observe_scopes(&token, &either),
             UnverifiedScopeObservation::ContainsRequiredScope
         );
-        // 반대 방향도 본다 — `Any` 가 무조건 참을 내는 변이를 죽인다.
+        // The opposite direction is checked too — this kills the mutant in which `Any`
+        // unconditionally yields true.
         let neither = ScopeExpr::Any(vec![
             ScopeExpr::One(Scope::UserData),
             ScopeExpr::One(Scope::Openid),
@@ -386,8 +397,9 @@ mod tests {
     #[test]
     fn only_a_three_segment_token_is_read_at_all() {
         let three = jwt_with_payload(&serde_json::json!({ "scp": ["vehicle_device_data"] }));
-        // 대조군: 같은 payload 가 3 세그먼트일 때는 읽힌다. 이게 없으면 아래 단언들이
-        // "어차피 다 Indeterminate" 라는 이유로 통과하는 공허한 테스트가 된다.
+        // Control: the same payload is read when it has 3 segments. Without this, the
+        // assertions below would be a vacuous test that passes because "everything is
+        // Indeterminate anyway".
         assert_eq!(
             observe_scopes(&three, &required_device_data()),
             UnverifiedScopeObservation::ContainsRequiredScope
@@ -399,7 +411,7 @@ mod tests {
             assert_eq!(
                 observe_scopes(&token, &required_device_data()),
                 UnverifiedScopeObservation::Indeterminate,
-                "{label} 은 compact JWS 가 아니다 — 인덱스 1 을 payload 로 읽으면 안 된다"
+                "{label} is not a compact JWS — index 1 must not be read as the payload"
             );
         }
     }
@@ -422,15 +434,17 @@ mod tests {
             .decode(payload_b64)
             .expect("decodable")
             .len();
-        // 이 테스트는 겨냥한 구간 안에 있을 때만 의미가 있다. 상수가 바뀌어 구간을
-        // 벗어나면 조용히 무력해지는 대신 여기서 깨지도록 스스로 확인한다.
+        // This test is meaningful only while it is inside the targeted range. It checks
+        // itself so that if the constant changes and it leaves the range, it breaks here
+        // instead of silently becoming powerless.
         assert!(
             payload_b64.len() > MAX_JWT_PAYLOAD_BYTES,
-            "인코딩 길이가 상한을 넘어야 이 테스트가 의미를 갖는다"
+            "the encoded length must exceed the bound for this test to be meaningful"
         );
         assert!(
             decoded_len <= MAX_JWT_PAYLOAD_BYTES,
-            "디코딩 길이는 상한 이하여야 한다 — 아니면 디코드 후 검사도 이 입력을 잡아 버린다"
+            "the decoded length must be at or under the bound — otherwise a check after \
+             decoding would catch this input too"
         );
         assert_eq!(
             observe_scopes(&token, &required_device_data()),
@@ -455,14 +469,15 @@ mod tests {
         assert_eq!(
             observe_scopes(&empty, &required_device_data()),
             UnverifiedScopeObservation::Indeterminate,
-            "빈 배열은 발급자의 진술이 아니라 상류 이상 신호로 읽는다"
+            "an empty array is read as a sign of an upstream anomaly, not as a statement by \
+             the issuer"
         );
         let absent = jwt_with_payload(&serde_json::json!({ "sub": "abc" }));
         assert_eq!(
             observe_scopes(&absent, &required_device_data()),
             UnverifiedScopeObservation::Indeterminate
         );
-        // 대조군: 비어 있지 않고 우리 것만 없는 집합은 여전히 skip 이다.
+        // Control: a set that is non-empty and lacks only ours is still a skip.
         let stated = jwt_with_payload(&serde_json::json!({ "scp": ["openid"] }));
         assert_eq!(
             observe_scopes(&stated, &required_device_data()),
@@ -479,7 +494,8 @@ mod tests {
         assert_eq!(
             observe_scopes(&token, &required_device_data()),
             UnverifiedScopeObservation::Indeterminate,
-            "이해하지 못한 구조에서 문자열만 골라 읽으면 이해한 척하는 것이 된다"
+            "picking only the strings out of a structure we did not understand is pretending \
+             to understand it"
         );
     }
 
@@ -502,7 +518,7 @@ mod tests {
             assert_eq!(
                 observe_scopes(&format!("{header}.{body}.sig"), &required_device_data()),
                 UnverifiedScopeObservation::ContainsRequiredScope,
-                "헤더를 보고 판정을 바꾸면 안 된다"
+                "the verdict must not change based on the header"
             );
         }
     }
@@ -520,10 +536,11 @@ mod tests {
             "padding": "?>".repeat(6),
         }));
         let payload_b64 = token.split('.').nth(1).expect("payload segment");
-        // 자기 검증: 이 payload 가 실제로 URL-safe 전용 글자를 담고 있어야 의미가 있다.
+        // Self-check: this payload must really contain URL-safe-only characters to be
+        // meaningful.
         assert!(
             payload_b64.contains('-') && payload_b64.contains('_'),
-            "payload 에 URL-safe 전용 글자가 없으면 이 테스트는 공허하다: {payload_b64}"
+            "this test is vacuous if the payload has no URL-safe-only characters: {payload_b64}"
         );
         assert_eq!(
             observe_scopes(&token, &required_device_data()),
@@ -545,7 +562,7 @@ mod tests {
         assert_eq!(
             size_of::<UnverifiedScopeObservation>(),
             1,
-            "변종에 데이터를 실으면 그 값은 곧 로그·오류로 흘러나간다"
+            "if a variant carries data, that value soon flows out into logs and errors"
         );
         let token = jwt_with_payload(&serde_json::json!({
             "scp": ["offline_access", "vehicle_device_data"]

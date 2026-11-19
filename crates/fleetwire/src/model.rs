@@ -243,8 +243,8 @@ mod tests {
         let j = r#"{"vin":"5YJ...","new_field_tesla_added":42}"#;
         let v: VehicleSummary = serde_json::from_str(j).unwrap();
         assert_eq!(v.vin.as_deref(), Some("5YJ..."));
-        assert!(v.state.is_none()); // 누락 필드 → None
-        assert!(v.extra.contains_key("new_field_tesla_added")); // 미지 필드 보존
+        assert!(v.state.is_none()); // missing field -> None
+        assert!(v.extra.contains_key("new_field_tesla_added")); // unknown field preserved
     }
     #[test]
     fn envelope_unwraps() {

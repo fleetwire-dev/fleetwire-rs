@@ -640,11 +640,11 @@ mod tests {
         let out = redact_account_id(s);
         assert!(
             !out.contains("00000000-1111-4222-8333-444444444444"),
-            "계정 ID 가 남았다: {out}"
+            "the account ID is still there: {out}"
         );
         assert!(
             out.contains("0aea2788-ca44-4391-95a3-774e13da5b5d"),
-            "진단용 request id 까지 지우면 안 된다: {out}"
+            "the diagnostic request id should not be erased as well: {out}"
         );
     }
 

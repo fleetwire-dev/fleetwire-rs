@@ -1,4 +1,4 @@
-//! 수락 스레드 하나 + 연결마다 스레드 하나인 모의 서버입니다.
+//! Mock server with one accept thread plus one thread per connection.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -9,10 +9,10 @@ use std::thread;
 
 use crate::{Match, Respond, ResponseTemplate};
 
-/// 요청 줄과 헤더를 합친 상한입니다. 넘으면 400 을 보내고 닫습니다.
+/// Cap on the request line and headers together. Over it, the server sends 400 and closes.
 const MAX_HEAD_BYTES: usize = 64 * 1024;
 
-/// 받은 요청 하나입니다.
+/// One received request.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub method: String,
@@ -22,18 +22,18 @@ pub struct Request {
 }
 
 impl Request {
-    /// 헤더 값을 찾습니다(이름 대소문자 무시, 첫 값).
+    /// Looks up a header value (case-insensitive name, first value).
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers.get(name).map(HeaderValue::as_str)
     }
 }
 
-/// 받은 헤더 목록입니다. `get(..)?.to_str()` 모양은 `http::HeaderMap` 과 같게 맞춥니다.
+/// The received header list. The `get(..)?.to_str()` shape is kept the same as `http::HeaderMap`.
 #[derive(Clone, Debug, Default)]
 pub struct Headers(Vec<(String, HeaderValue)>);
 
 impl Headers {
-    /// 이름(대소문자 무시)이 같은 첫 값입니다.
+    /// The first value whose name is the same (case-insensitive).
     pub fn get(&self, name: &str) -> Option<&HeaderValue> {
         self.0
             .iter()
@@ -46,7 +46,7 @@ impl Headers {
     }
 }
 
-/// 헤더 값 하나입니다. 시험 서버는 UTF-8 로만 받으므로 `to_str` 는 실패하지 않습니다.
+/// One header value. The test server accepts UTF-8 only, so `to_str` never fails.
 #[derive(Clone, Debug)]
 pub struct HeaderValue(String);
 
@@ -60,7 +60,7 @@ impl HeaderValue {
     }
 }
 
-/// 기대 횟수입니다.
+/// Expected number of calls.
 #[derive(Clone, Debug)]
 pub struct Times {
     min: u64,
@@ -94,12 +94,12 @@ impl From<RangeFrom<u64>> for Times {
     }
 }
 
-/// 매처를 모으는 중인 목입니다.
+/// A mock that is still collecting matchers.
 pub struct MockBuilder {
     matchers: Vec<Box<dyn Match>>,
 }
 
-/// 매처와 응답이 정해진 목입니다.
+/// A mock whose matchers and response are set.
 pub struct Mock {
     matchers: Vec<Box<dyn Match>>,
     responder: Box<dyn Respond>,
@@ -126,7 +126,7 @@ impl Mock {
         self
     }
 
-    /// 작을수록 먼저 봅니다. 기본은 5 입니다(wiremock 과 같음).
+    /// A smaller value is tried first. The default is 5 (same as wiremock).
     pub fn with_priority(mut self, p: u8) -> Self {
         self.priority = p;
         self
@@ -178,13 +178,14 @@ struct Shared {
     stop: AtomicBool,
 }
 
-/// 루프백에서 도는 모의 서버입니다. 버리면 기대 횟수를 검사하고 멈춥니다.
+/// A mock server running on loopback. Dropping it checks the expected call counts and stops it.
 pub struct MockServer {
     addr: SocketAddr,
     shared: Arc<Shared>,
 }
 
-/// 잠금 오염은 시험 실패(다른 스레드의 panic)에서만 생기므로 내용을 그대로 씁니다.
+/// Lock poisoning happens only on a test failure (a panic in another thread), so the contents
+/// are used as they are.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -227,12 +228,12 @@ impl MockServer {
         mock.mount(self);
     }
 
-    /// 받은 요청 전부입니다. wiremock 과 모양을 맞추려고 언제나 `Some` 입니다.
+    /// Every received request. Always `Some`, to keep the same shape as wiremock.
     pub fn received_requests(&self) -> Option<Vec<Request>> {
         Some(lock(&self.shared.requests).clone())
     }
 
-    /// 기대 횟수를 어긴 목이 있으면 panic 합니다.
+    /// Panics when a mock broke its expected call count.
     pub fn verify(&self) {
         let mocks = lock(&self.shared.mocks);
         for m in mocks.iter() {
@@ -254,7 +255,7 @@ impl MockServer {
 impl Drop for MockServer {
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::SeqCst);
-        // 수락 루프를 깨웁니다. 실패해도 스레드는 프로세스와 함께 끝납니다.
+        // Wakes the accept loop. Even if this fails, the thread ends with the process.
         let _ = TcpStream::connect(self.addr);
         if !thread::panicking() {
             self.verify();
@@ -262,7 +263,7 @@ impl Drop for MockServer {
     }
 }
 
-/// 연결 하나를 처리합니다. 요청 하나를 읽고 응답 하나를 쓴 뒤 닫습니다.
+/// Handles one connection: reads one request, writes one response and closes.
 fn handle(stream: TcpStream, addr: SocketAddr, shared: &Shared) {
     let Ok(read_half) = stream.try_clone() else {
         return;
@@ -301,7 +302,8 @@ fn handle(stream: TcpStream, addr: SocketAddr, shared: &Shared) {
     write_response(&mut out, &template);
 }
 
-/// 요청을 읽습니다. 연결이 바로 닫혔으면 `None`, 형식이 틀렸으면 `Some(Err(()))` 입니다.
+/// Reads a request. `None` when the connection closed right away, `Some(Err(()))` when the
+/// request is malformed.
 fn read_request(
     reader: &mut BufReader<TcpStream>,
     addr: SocketAddr,
@@ -389,7 +391,7 @@ fn reason(status: u16) -> &'static str {
     }
 }
 
-/// 응답을 씁니다. 쓰기 오류는 무시합니다(클라이언트가 먼저 끊는 시험이 있습니다).
+/// Writes the response. Write errors are ignored (some tests have the client hang up first).
 fn write_response(out: &mut TcpStream, t: &ResponseTemplate) {
     if let Some(d) = t.delay {
         thread::sleep(d);

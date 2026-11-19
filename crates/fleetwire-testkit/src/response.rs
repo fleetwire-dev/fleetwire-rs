@@ -1,8 +1,8 @@
-//! 응답 틀입니다.
+//! Response template.
 
 use std::time::Duration;
 
-/// 모의 서버가 돌려줄 응답 하나입니다.
+/// One response the mock server will return.
 #[derive(Clone, Debug)]
 pub struct ResponseTemplate {
     pub(crate) status: u16,
@@ -44,7 +44,7 @@ impl ResponseTemplate {
         self
     }
 
-    /// 같은 이름이 있으면 바꿉니다. 이름은 소문자로 저장합니다.
+    /// Replaces a header of the same name if there is one. The name is stored in lowercase.
     pub fn insert_header(mut self, name: impl AsRef<str>, value: impl AsRef<str>) -> Self {
         let name = name.as_ref().to_ascii_lowercase();
         self.headers.retain(|(k, _)| *k != name);
@@ -52,19 +52,20 @@ impl ResponseTemplate {
         self
     }
 
-    /// 상태 줄을 보내기 전에 기다립니다.
+    /// Waits before sending the status line.
     pub fn set_delay(mut self, d: Duration) -> Self {
         self.delay = Some(d);
         self
     }
 
-    /// 헤더는 바로 보내고, 본문은 `chunk` 바이트마다 `gap` 만큼 쉬며 보냅니다.
+    /// Sends the headers at once, and the body with a pause of `gap` after every `chunk` bytes.
     pub fn trickle_body(mut self, chunk: usize, gap: Duration) -> Self {
         self.trickle = Some((chunk.max(1), gap));
         self
     }
 
-    /// `content-length` 는 전체 길이로 알리고, 본문을 `n` 바이트만 보낸 뒤 연결을 끊습니다.
+    /// Announces the full length in `content-length`, sends only `n` bytes of the body and then
+    /// closes the connection.
     pub fn cut_after_body_bytes(mut self, n: usize) -> Self {
         self.cut_after = Some(n);
         self

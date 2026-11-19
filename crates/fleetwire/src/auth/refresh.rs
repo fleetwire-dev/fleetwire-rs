@@ -28,7 +28,8 @@ use crate::redaction::body_preview;
 pub const REFRESH_TIMEOUT: Duration = Duration::from_secs(8);
 
 const TOKEN_URL: &str = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token";
-// 메시지 길이 예산은 부모 모듈 한 곳에 있다 — 여기 다시 적으면 두 값이 갈라진다.
+// The message length budget lives in one place, the parent module — writing it again here
+// would let the two values drift apart.
 use super::MSG_MAX;
 
 /// The response JSON. If `expires_in` is missing it is set to 0.
@@ -70,7 +71,8 @@ impl HttpRefresher {
     /// sent (design §4).
     pub fn new(client_id: String) -> Self {
         Self {
-            // 리다이렉트를 따라가면 자격 증명이 다른 호스트로 갈 수 있습니다(design §4.6) — `net::agent` 가 막습니다.
+            // Following a redirect could send the credentials to another host (design §4.6) —
+            // `net::agent` blocks it.
             agent: crate::net::agent(REFRESH_TIMEOUT),
             client_id,
             token_url: TOKEN_URL.parse().expect("const URL parses"),
@@ -109,20 +111,22 @@ impl TokenRefresher for HttpRefresher {
             ("client_id", self.client_id.as_str()),
             ("refresh_token", refresh_token),
         ];
-        // 보내기와 본문 읽기를 **하나의** 마감으로 묶습니다(review round 1 critical #1). 헤더는 빨리 오고
-        // 본문만 멈추는 응답이어도 `self.timeout` 안에 끝나야 `state_deadline`(10초) 예산을 지킵니다.
+        // Sending and reading the body are bound to **one** deadline (review round 1 critical
+        // #1). Even a response whose headers arrive quickly and whose body alone stalls must
+        // finish within `self.timeout` to keep the `state_deadline` (10 seconds) budget.
         let deadline = Instant::now()
             .checked_add(self.timeout)
             .unwrap_or_else(Instant::now);
 
-        // 이 크레이트에서 POST 가 허용되는 **유일한 지점**입니다.
-        // clippy.toml 이 나머지 전부를 막습니다(design §3).
+        // This is the **only place** in this crate where a POST is allowed.
+        // clippy.toml blocks all the rest (design §3).
         #[allow(clippy::disallowed_methods)]
         let sent = self.agent.post(self.token_url.as_str()).send_form(form);
 
-        // 서버가 회전을 완료했는데 응답만 유실됐을 수 있습니다(헤더만 오고 본문이 멈춘 경우 포함).
-        // 그 경우 우리가 가진 refresh_token 은 이미 무효이고 복구는 재-OAuth 뿐입니다.
-        // **재시도하지 않습니다** — 재시도는 악화입니다.
+        // The server may have completed the rotation with only the response lost (including the
+        // case where the headers arrive and the body stalls). In that case the refresh_token
+        // we hold is already invalid and the only recovery is a re-OAuth.
+        // **Do not retry** — a retry makes things worse.
         let timed_out = || Error::Auth {
             message: body_preview("token refresh timed out", MSG_MAX),
             pricing: None,

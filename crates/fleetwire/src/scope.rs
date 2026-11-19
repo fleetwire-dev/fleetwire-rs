@@ -37,7 +37,8 @@ pub struct UnknownScope;
 
 impl core::fmt::Display for UnknownScope {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // 스코프 문자열 자체를 담지 않는다 — 토큰 유래 값을 오류에 싣지 않기 위해서다.
+        // The scope string itself is not included, so that no token-derived value is carried
+        // in the error.
         f.write_str("unrecognized scope")
     }
 }
@@ -231,7 +232,8 @@ mod tests {
     #[test]
     fn from_str_accepts_every_modeled_scope_in_wire_form() {
         use core::str::FromStr;
-        // 기대값을 Scope 자신이 아니라 Tesla 와이어 문자열에서 독립적으로 유도한다.
+        // Derive the expected values independently from Tesla's wire strings, not from Scope
+        // itself.
         let pairs = [
             ("openid", Scope::Openid),
             ("user_data", Scope::UserData),
@@ -246,10 +248,10 @@ mod tests {
     #[test]
     fn from_str_rejects_unknown_scope_without_panicking() {
         use core::str::FromStr;
-        // 실측 토큰의 scp 에 실제로 들어 있는 값 — 모델링돼 있지 않다.
+        // A value that really is in the measured token's scp, and that is not modeled.
         assert!(Scope::from_str("offline_access").is_err());
         assert!(Scope::from_str("").is_err());
-        assert!(Scope::from_str("VehicleDeviceData").is_err()); // PascalCase 는 와이어 형식이 아니다
+        assert!(Scope::from_str("VehicleDeviceData").is_err()); // PascalCase is not the wire form
     }
 
     /// `from_str` must accept the **same** set of strings as the serde wire form.
@@ -274,10 +276,10 @@ mod tests {
                 Scope::UserData => "user_data",
                 Scope::Openid => "openid",
             };
-            // serde 가 실제로 그 문자열을 내는지 먼저 고정하고,
+            // First pin that serde really emits that string,
             let serialized = serde_json::to_string(&scope).unwrap();
             assert_eq!(serialized, format!("\"{wire}\""));
-            // from_str 이 같은 문자열을 같은 variant 로 받는지 확인한다.
+            // then check that from_str takes the same string as the same variant.
             assert_eq!(
                 Scope::from_str(wire),
                 Ok(scope),
@@ -294,19 +296,19 @@ mod tests {
     fn from_str_does_not_normalize_or_trim_or_partial_match() {
         use core::str::FromStr;
         for bad in [
-            "OPENID",                     // 대문자 정규화 금지
-            "Openid",                     // serde 기본 variant 이름 인코딩
-            "VEHICLE_DEVICE_DATA",        // 대문자 snake
+            "OPENID",                     // no uppercase normalization
+            "Openid",                     // serde's default variant-name encoding
+            "VEHICLE_DEVICE_DATA",        // uppercase snake
             "vehicleDeviceData",          // camelCase
-            " openid",                    // 선행 공백 — trim 금지
-            "openid ",                    // 후행 공백 — trim 금지
-            "openid\n",                   // 개행
-            "open id",                    // 공백 삽입
-            "openidx",                    // prefix 일치만으로 통과 금지
-            "id",                         // suffix 일치만으로 통과 금지
-            "openid vehicle_device_data", // 공백 구분 문자열 전체
-            "offline_access",             // 실측 토큰의 미지 스코프
-            "vehicle_cmds",               // 명령 스코프 — 이 크레이트는 모델링하지 않는다
+            " openid",                    // leading space: no trim
+            "openid ",                    // trailing space: no trim
+            "openid\n",                   // newline
+            "open id",                    // inserted space
+            "openidx",                    // a prefix match alone must not pass
+            "id",                         // a suffix match alone must not pass
+            "openid vehicle_device_data", // the whole space-separated string
+            "offline_access",             // the unknown scope in the measured token
+            "vehicle_cmds",               // command scope: this crate does not model it
             "",
         ] {
             assert!(
@@ -349,14 +351,14 @@ mod tests {
                 Scope::VehicleLocation
             ],
         );
-        // 미지 스코프를 버려도 알려진 요구 스코프 판정은 그대로다.
+        // Dropping the unknown scope leaves the verdict on the known required scopes unchanged.
         let required = ScopeExpr::All(vec![
             ScopeExpr::One(Scope::VehicleDeviceData),
             ScopeExpr::One(Scope::VehicleLocation),
         ]);
         assert!(required.is_satisfied_by(&held));
         assert_eq!(required.missing(&held), None);
-        // 보유하지 않은 스코프는 여전히 미충족으로 남는다.
+        // A scope that is not held still stays unsatisfied.
         assert!(!ScopeExpr::One(Scope::UserData).is_satisfied_by(&held));
     }
 

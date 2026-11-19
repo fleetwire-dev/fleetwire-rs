@@ -33,10 +33,11 @@ fn n_threads_share_one_refresh() {
             });
         }
     });
-    // 음성 대조: lock_within 이 refreshing 을 기다리지 않으면 2 이상이 됩니다.
+    // Negative control: if lock_within does not wait for refreshing, this becomes 2 or more.
     assert_eq!(refreshes.load(Ordering::SeqCst), 1);
-    // 기다리던 쪽은 `finish` 의 깨우기로 곧바로 풀려야 합니다. 음성 대조: `notify_all` 을 지우면
-    // 대기자가 마감(5초)까지 자다가 깨어 이 단언이 실패합니다(최종 검토 I-1).
+    // The waiting side must be released right away by the wake-up in `finish`. Negative
+    // control: if `notify_all` is deleted, the waiters sleep until the deadline (5 seconds)
+    // before waking and this assertion fails (final review I-1).
     assert!(
         started.elapsed() < Duration::from_secs(2),
         "waiters were not woken by finish: {:?}",
@@ -81,7 +82,8 @@ fn a_panicking_refresh_forbids_further_refresh_and_wakes_waiters() {
                 .lock_within(Duration::from_secs(5))
                 .expect("waiter should be woken, not stuck");
             assert_eq!(g.recovered, 1);
-            // 음성 대조: Drop 의 `notify_all` 을 지우면 마감(5초)까지 잡니다(최종 검토 I-1).
+            // Negative control: if the `notify_all` in Drop is deleted, the waiter sleeps
+            // until the deadline (5 seconds) (final review I-1).
             assert!(
                 t.elapsed() < Duration::from_secs(2),
                 "waiter was not woken by the dropped ticket: {:?}",
