@@ -56,8 +56,11 @@ pub(crate) fn read_capped(
             Ok(0) => return Ok(body),
             Ok(n) => n,
             Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            // ureq 는 마감이 지나면 읽기를 `Timeout` I/O 오류로 끝냅니다. 마감 뒤의 오류는 「마감」으로 봅니다.
-            Err(_) if Instant::now() >= deadline => return Err(ReadError::Deadline),
+            // ureq ends a read with a timeout I/O error once its own clock runs out. Any error
+            // after our deadline, and any timeout error even a moment before it, is a deadline.
+            Err(e) if Instant::now() >= deadline || is_timeout(&e) => {
+                return Err(ReadError::Deadline);
+            }
             Err(e) => return Err(ReadError::Io(e)),
         };
         let chunk = buf.get(..n).unwrap_or_default();
@@ -66,6 +69,21 @@ pub(crate) fn read_capped(
         }
         body.extend_from_slice(chunk);
     }
+}
+
+/// Whether a read error is a timeout: the OS kind `TimedOut`, or ureq's own `Timeout` wrapped
+/// in an I/O error (`ureq::Error::into_io` gives kind `Other`, so the kind alone misses it).
+///
+/// Our deadline is taken before the request is sent, so ureq's global deadline is never earlier.
+/// But ureq hands the remaining time to the socket read timeout and reports `Timeout` as soon as
+/// that read returns, which can be slightly before our deadline (unconfirmed guess: the kernel
+/// wakes the read a few ms early). Without this the caller reported a plain I/O error instead of
+/// a timeout (`timeout: global`, verify run 2026-11-16).
+fn is_timeout(e: &io::Error) -> bool {
+    e.kind() == io::ErrorKind::TimedOut
+        || e.get_ref()
+            .and_then(|inner| inner.downcast_ref::<ureq::Error>())
+            .is_some_and(|u| matches!(u, ureq::Error::Timeout(_)))
 }
 
 /// The verdict on whether a request reached the server (the input to billing and retry
