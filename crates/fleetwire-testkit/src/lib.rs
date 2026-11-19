@@ -4,8 +4,8 @@
 //! only by `Content-Length` (our client never sends chunked requests).
 //!
 //! Test-only. This server parses incoming input by hand, so a production crate must not take it
-//! as a normal dependency (`.claude/rules/dependencies.md`, "things we do not build ourselves":
-//! HTTP/1.1 server framing).
+//! as a normal dependency: HTTP/1.1 server framing is on the list of things this project does
+//! not build for production use.
 
 // This is a test-only crate, so failing the test with panic! when an expectation is not met is
 // the intended behaviour (same as wiremock's `expect`). Only this crate is exempted from the

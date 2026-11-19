@@ -1087,7 +1087,9 @@ mod tests {
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).expect("chmod");
             let err = TokenStore::new(dir.to_path_buf())
                 .store(&token_set_expiring_at(1))
-                .expect_err("tokens should not be written into an open directory");
+                .expect_err(
+                    "tokens should not be written into a group- or world-writable directory",
+                );
             assert!(
                 matches!(err, StoreError::BadDirPermissions),
                 "mode {mode:o}: {err:?}"
@@ -1115,7 +1117,7 @@ mod tests {
             .expect_err("must fail");
         assert!(
             matches!(err, StoreError::BadDirPermissions),
-            "even a perfect 0600 file must be refused when the directory is open: {err:?}"
+            "even a perfect 0600 file must be refused when others can write the directory: {err:?}"
         );
     }
 

@@ -133,9 +133,9 @@
 //! embedded `\"` doesn't end the match early.
 //!
 //! [`redact_transport_error`] (A3 Task 2): REQ-18 also requires scrubbing a
-//! `reqwest::Error`'s `Display` and its `source()` chain, since `reqwest`
-//! puts the request URL (which may carry a VIN as a path segment) straight
-//! into `Display`. It lives in **this** module, not in `transport.rs` —
+//! transport error's `Display` and its `source()` chain, since an HTTP
+//! client's error can carry the request URL (which may hold a VIN as a path
+//! segment) straight into `Display`. It lives in **this** module, not in `transport.rs` —
 //! [`body_preview`] must stay the sole safe entry point for any
 //! user-visible error string, and a redaction helper defined outside this
 //! module would bypass that contract (this exact mistake was made once

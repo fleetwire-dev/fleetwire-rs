@@ -278,7 +278,7 @@ pub struct Client {
     ///
     /// It measures the retry guard ("at the default, a second one is not sent") at **the
     /// boundary this crate actually owns**. The number of requests the server received
-    /// (wiremock's `received_requests()`) is not this crate's behaviour — a failure can
+    /// (the mock server's `received_requests()`) is not this crate's behaviour — a failure can
     /// only be diagnosed if that difference can be told apart.
     ///
     /// **The "transport-layer retransmission" claim written down as the rationale when
@@ -305,8 +305,8 @@ pub struct Client {
 /// **Not** `Url::origin().ascii_serialization()`. That serializes *every*
 /// opaque origin to the literal string `"null"`, so registering a single
 /// non-special-scheme URL would make every opaque-origin URL compare equal
-/// to it. Nothing today can reach that (the hatch is test-only and reqwest
-/// would refuse the request anyway), but a security-adjacent comparison
+/// to it. Nothing today can reach that (the hatch is test-only and the HTTP
+/// client would refuse the request anyway), but a security-adjacent comparison
 /// whose "not equal" case can collapse into "equal" is the wrong shape to
 /// leave lying around — fix round 1, review Minor 3.
 #[cfg(test)]
@@ -1479,7 +1479,7 @@ impl ClientBuilder {
     /// Test-only: accept one full origin (`scheme://host:port`) verbatim as
     /// a region URL.
     ///
-    /// **Why this exists.** `wiremock` serves plain HTTP on an ephemeral
+    /// **Why this exists.** The mock server serves plain HTTP on an ephemeral
     /// port, so a mock region response can only ever name
     /// `http://127.0.0.1:PORT` — which [`validate_region_url`] rejects
     /// twice over (not https, not the default port), correctly. Without a
@@ -1506,28 +1506,23 @@ impl ClientBuilder {
 
     /// Builds the [`Client`].
     ///
-    /// # Redirects are disabled on the underlying `reqwest::Client`
+    /// # Redirects are disabled on the underlying agent
     ///
-    /// `reqwest`'s default policy follows up to 10 redirects automatically.
+    /// The agent comes from `crate::net::agent`, the one place this crate
+    /// builds one, and that function sets `max_redirects(0)`.
     /// [`crate::transport::execute_get`] has a guard that rejects a 3xx
-    /// status itself, but that guard is unreachable dead code unless the
-    /// underlying client is *also* configured not to follow redirects first
-    /// — otherwise a 3xx response is already resolved to whatever it points
-    /// at (200, another error, anything) before `execute_get` ever sees a
-    /// status code. This is the one place the client is actually
-    /// constructed, so this is where that policy has to be set.
+    /// status itself, but that guard would be unreachable dead code if the
+    /// agent followed redirects first: a 3xx response would already be
+    /// resolved to whatever it points at (200, another error, anything)
+    /// before `execute_get` ever saw a status code.
     ///
-    /// Fix round 1 (Minor 2): this doc previously framed the risk as
-    /// "Authorization could follow a redirect to a different host" — that
-    /// overstates it. `reqwest` 0.12.28 already strips the `Authorization`
-    /// header itself on a cross-host redirect, regardless of this policy.
-    /// `Policy::none()` is still the correct setting, for two reasons that
-    /// hold independent of that stripping behaviour: a *same-host* redirect
-    /// would still carry the header (and this crate never validates where a
-    /// same-host redirect actually points), and design §4.6 wants a 3xx
-    /// response to fail loudly through [`Error::Api`] rather than be
-    /// silently resolved by the HTTP layer before this crate's own gates
-    /// ever see it.
+    /// Not following is the right setting whatever an HTTP client does with
+    /// the `Authorization` header on a redirect, for two reasons: a
+    /// *same-host* redirect would still carry the header (and this crate
+    /// never validates where a same-host redirect actually points), and
+    /// design §4.6 wants a 3xx response to fail loudly through
+    /// [`Error::Api`] rather than be silently resolved by the HTTP layer
+    /// before this crate's own gates ever see it.
     ///
     /// # Errors
     ///

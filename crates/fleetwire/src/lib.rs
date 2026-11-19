@@ -277,7 +277,7 @@ mod test_support;
 mod transport;
 
 // Crate-root re-exports of the types callers touch on nearly every call
-// (design §2's module map: `lib.rs # public re-export`). Final fix wave (F11):
+// (design §2's module map, the `lib.rs` entry). Final fix wave (F11):
 // there were none, so the shortest way to name the error type was
 // `fleetwire::error::Error`. The module paths remain public, so both spellings
 // work; these are the canonical ones.
