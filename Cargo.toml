@@ -18,6 +18,8 @@ authors = ["Jeong Seung Hwan <4435353+draken1@users.noreply.github.com>"]
 # No crate in this workspace uses unsafe code.
 [workspace.lints.rust]
 unsafe_code = "forbid"
+# `cargo fuzz` builds with `--cfg fuzzing`; the fleetwire crate exposes its fuzz entry points only then.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 
 # clippy.toml only takes effect with this lint enabled.
 [workspace.lints.clippy]
