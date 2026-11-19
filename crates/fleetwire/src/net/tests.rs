@@ -208,15 +208,16 @@ fn read_capped_passes_io_errors_through() {
     }
 }
 
-/// ureq 는 마감이 지나면 읽기를 `Timeout` I/O 오류로 끝냅니다. 그 오류는 「마감」으로 보고해야
-/// 호출자가 「시간 초과」로 알릴 수 있습니다(헤더만 오고 본문이 멈춘 응답).
+/// Any read error that arrives after the deadline is reported as the deadline, so the caller can
+/// say "timed out" (headers arrived, then the body stalled). The error here is deliberately not a
+/// timeout kind, so this test guards the "past the deadline" branch on its own.
 #[test]
 fn read_capped_reports_an_io_error_past_the_deadline_as_deadline() {
     struct LateBroken;
     impl Read for LateBroken {
         fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
             std::thread::sleep(Duration::from_millis(60));
-            Err(io::Error::new(io::ErrorKind::TimedOut, "timeout: global"))
+            Err(io::Error::new(io::ErrorKind::ConnectionReset, "reset"))
         }
     }
     let got = read_capped(
@@ -225,4 +226,37 @@ fn read_capped_reports_an_io_error_past_the_deadline_as_deadline() {
         Instant::now() + Duration::from_millis(30),
     );
     assert!(matches!(got, Err(ReadError::Deadline)), "{got:?}");
+}
+
+/// A reader that fails at once with the given error, long before the deadline.
+struct FailsWith(fn() -> io::Error);
+
+impl Read for FailsWith {
+    fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err((self.0)())
+    }
+}
+
+/// ureq's global timer can run out a moment before our deadline under load; its error arrives
+/// as an I/O error of kind `Other` wrapping `ureq::Error::Timeout` (2026-11-16 verify failure).
+#[test]
+fn read_capped_reports_a_wrapped_ureq_timeout_before_the_deadline_as_deadline() {
+    let mut r = FailsWith(|| ureq::Error::Timeout(ureq::Timeout::Global).into_io());
+    let got = read_capped(&mut r, 10, far());
+    assert!(matches!(got, Err(ReadError::Deadline)), "{got:?}");
+}
+
+#[test]
+fn read_capped_reports_a_timed_out_kind_before_the_deadline_as_deadline() {
+    let mut r = FailsWith(|| io::Error::new(io::ErrorKind::TimedOut, "socket read timed out"));
+    let got = read_capped(&mut r, 10, far());
+    assert!(matches!(got, Err(ReadError::Deadline)), "{got:?}");
+}
+
+/// The other side of the branch: a non-timeout ureq error wrapped the same way stays an I/O error.
+#[test]
+fn read_capped_keeps_a_wrapped_non_timeout_ureq_error_as_io() {
+    let mut r = FailsWith(|| ureq::Error::ConnectionFailed.into_io());
+    let got = read_capped(&mut r, 10, far());
+    assert!(matches!(got, Err(ReadError::Io(_))), "{got:?}");
 }
