@@ -473,7 +473,7 @@ fn a_blocked_second_caller_gets_the_interval_error_not_a_file_lock_timeout() {
     // ```
     //
     // This form not only reads the generation **outside** the critical section, it also releases
-    // the tokio mutex **before the flock**, inverting the lock order. This is the point where
+    // the state mutex **before the flock**, inverting the lock order. This is the point where
     // that inversion becomes observable:
     //
     //   - Correct implementation: the winner releases the mutex and the flock **together**. The
@@ -524,7 +524,7 @@ fn a_blocked_second_caller_gets_the_interval_error_not_a_file_lock_timeout() {
     );
     assert!(
         !msg.contains("token lock:"),
-        "the loser starved on the file lock — this means the winner released the tokio mutex \
+        "the loser starved on the file lock — this means the winner released the state mutex \
          before the flock, which is a side effect of an implementation that reads the \
          generation outside the critical section: {msg}"
     );
@@ -863,8 +863,8 @@ fn concurrent_callers_collapse_into_exactly_one_refresh() {
 fn concurrent_callers_are_served_from_memory_rather_than_each_taking_the_file_lock() {
     // The test above alone cannot tell **which mechanism** did the collapsing. The cross-process
     // file lock by itself also collapses concurrent callers in the same process (a late caller
-    // waits for the lock and then adopts from disk). So a mutation that releases the tokio Mutex
-    // across the await passes the test above unchanged.
+    // waits for the lock and then adopts from disk). So a mutation that releases the state mutex
+    // across the refresh passes the test above unchanged.
     //
     // Setting the file lock deadline to 0 exposes the difference. With the in-process
     // single-flight REQ-15 calls for, a late caller gets its answer **from memory** and never
@@ -916,7 +916,7 @@ fn concurrent_callers_are_served_from_memory_rather_than_each_taking_the_file_lo
 #[test]
 fn two_managers_sharing_a_directory_collapse_into_one_refresh() {
     // The **cross-process** half of REQ-15 AC2. Every concurrency test up to here used **one**
-    // manager, and then the tokio mutex serializes everything before the file lock is ever
+    // manager, and then the state mutex serializes everything before the file lock is ever
     // contended — the flock path "re-read the disk under the lock → adopt if a sibling
     // refreshed" was never executed. The only contention test
     // (`a_lock_timeout_never_refreshes`) holds the lock with a bare `lock::acquire`, so the
@@ -1002,7 +1002,7 @@ fn a_contended_in_process_mutex_times_out_with_a_message_distinct_from_the_file_
     // POST, so giving up loses no state — that is why the boundary is drawn here.
     let dir = temp_dir("statedeadline");
     seed_expired_token(&dir);
-    // Hold the critical section (= the refresh await) for a long time.
+    // Hold the critical section (= the refresh call) for a long time.
     let refresher = Arc::new(CountingRefresher::with_delay("NEW", Duration::from_secs(1)));
     let mgr = Arc::new(
         TokenManager::new(dir.to_path_buf(), Arc::clone(&refresher) as Arc<_>)

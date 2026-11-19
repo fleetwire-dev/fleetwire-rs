@@ -223,7 +223,6 @@ fn list_vehicles_sends_pagination_params() {
 /// result there is nothing left to call `Client::send` with. "An error happened" alone
 /// does not prove "nothing went out" (review finding), so no Mock is registered on the
 /// mock server and the request log is checked directly — had any request gone out,
-/// wiremock would panic at once for lack of a matching Mock, or at the very least
 /// `received_requests()` would not be empty.
 #[test]
 fn malformed_vin_never_reaches_the_wire() {
@@ -291,11 +290,10 @@ fn send_propagates_a_4xx_as_an_error() {
     assert!(matches!(e, Error::Auth { .. }), "actual: {e:?}");
 }
 
-/// Tests the very `redirect::Policy::none()` that this task required.
-/// The test of the same name and nature in `transport.rs` exercises the policy with a
-/// (hardcoded) reqwest::Client that file builds on its own, so it keeps passing even if
-/// `ClientBuilder::build()` itself drops that policy setting — this test closes that gap
-/// (the requirement the brief moved into this task).
+/// Tests the no-redirect setting of the agent that `ClientBuilder::build()` really uses.
+/// The test of the same nature in `transport.rs` exercises an agent that file builds on
+/// its own, so it keeps passing even if `ClientBuilder::build()` itself drops the
+/// setting — this test closes that gap (the requirement the brief moved into this task).
 #[test]
 fn client_builder_does_not_follow_redirects() {
     let evil = MockServer::start();
@@ -320,8 +318,8 @@ fn client_builder_does_not_follow_redirects() {
     assert!(r.is_err(), "must not follow the redirect: {r:?}");
     assert!(
         evil.received_requests().unwrap().is_empty(),
-        "🔴 reqwest followed the redirect and sent a request to the evil host \
-         — Policy::none() is missing from ClientBuilder::build()"
+        "the client followed the redirect and sent a request to the evil host \
+         — the agent ClientBuilder::build() uses follows redirects"
     );
 }
 
@@ -428,8 +426,9 @@ fn send_raw_classifies_errors_the_same_way_send_does() {
     }
 }
 
-/// **Does not follow redirects.** `send_raw` shares `send_inner`, so `Policy::none()`
-/// applies unchanged — had a separate path been built, it would break here.
+/// **Does not follow redirects.** `send_raw` shares `send_inner`, so the agent's
+/// no-redirect setting applies unchanged — had a separate path been built, it would break
+/// here.
 #[test]
 fn send_raw_does_not_follow_redirects() {
     let evil = MockServer::start();
@@ -692,7 +691,7 @@ fn test_client_builder_with(
     let url: crate::Url = server.uri().parse().unwrap();
     let host = url.host_str().unwrap().to_owned();
     // T7: puts the mock server's host on the allowlist. `allow_region_host` alone is
-    // not enough — wiremock is plaintext HTTP on an arbitrary port, so it trips the
+    // not enough — the mock server is plaintext HTTP on an arbitrary port, so it trips the
     // https and default-port checks. Hence the origin hatch (`#[cfg(test)]`) is used
     // along with it. Both lines are **test-only**, and the default of
     // `allow_region_host` is closed (`TESLA_REGION_HOSTS` only) — do not flip that
@@ -2204,7 +2203,7 @@ fn recovery_budget_is_shared_across_the_whole_send_not_per_retry_attempt() {
     }
     // A safety net for requests beyond the script (the normal path should never reach
     // it, and an unlimited catch-all is put last so that, if it is reached, the count
-    // assertion below fails cleanly instead of wiremock panicking).
+    // assertion below fails cleanly instead of on an unmatched request).
     Mock::given(method("GET"))
         .respond_with(ResponseTemplate::new(503).set_body_raw(b"{}".to_vec(), "application/json"))
         .mount(&server);
@@ -2274,7 +2273,7 @@ fn transport_unknown_is_never_retried_even_when_enabled() {
 /// (default 1→3) survived — because the first two sleeps of exponential backoff
 /// (≈100ms+200ms, shortened further by jitter) happen to add up to less than 500ms.
 /// Counting the requests (discipline article 3) has to match the default exactly
-/// whatever value it is changed to, so it does not go dead — the reason the same
+/// whatever value it is changed to, so M1 cannot survive it — the reason the same
 /// assertion as `default_does_not_retry_even_on_retryable_5xx` is repeated here is that
 /// "the backoff takes little time" and "there is no retry at all" hang on different code
 /// paths (the former on `backoff_delay`+`sleep`, the latter on the `retries_used`+1 vs
@@ -2338,7 +2337,7 @@ fn zero_chain_deadline_permits_no_retries_at_all() {
     // Deterministic assertion: request count == 1 is the heart of this test. The
     // elapsed-time assertion below is only a bonus sanity check on top of it (just loose
     // enough to catch a real entry into backoff) — once the request count is settled at
-    // 1, a local wiremock round trip that happens to take long (slow CI/WSL) has nothing
+    // 1, a local mock round trip that happens to take long (slow CI/WSL) has nothing
     // to do with the property this test protects.
     let reqs = server.received_requests().unwrap();
     assert_eq!(

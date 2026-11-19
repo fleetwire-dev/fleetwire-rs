@@ -111,7 +111,7 @@ fn refresh_token_never_appears_in_error() {
 }
 
 /// M4 kill: following a redirect hands the credentials (the token) to another host.
-/// Whether `redirect::Policy::none()` is really in effect is confirmed by the second
+/// Whether the no-redirect setting is really in effect is confirmed by the second
 /// server **receiving no request at all** — the failure to parse the first response body
 /// is only a side effect, and what is counted here is the number of requests at the second
 /// server (the mechanism).
@@ -143,14 +143,13 @@ fn does_not_follow_redirect_to_second_host() {
     assert_eq!(
         redirected_reqs.len(),
         0,
-        "the redirect target received a request — redirect::Policy::none() is not in effect"
+        "the redirect target received a request — the refresher's agent follows redirects"
     );
 }
 
 /// review round 1 critical #1 kill: reproduces a response whose headers arrive at once and
-/// whose body alone stalls. `wiremock::ResponseTemplate::set_delay` cannot be used —
-/// wiremock 0.6 always builds the response whole as a completed `Full<Bytes>` and only then
-/// delays it (response_template.rs), so it cannot express "fast headers, slow body only";
+/// whose body alone stalls. A delay on the whole response cannot be used — it holds back
+/// the headers as well, so it cannot express "fast headers, slow body only";
 /// setting a delay makes the receipt of the headers itself (= `send()`) late, so the old
 /// (buggy) code is also already caught by the timeout that wrapped only `send()` — that is,
 /// that method cannot tell this regression apart. So a hand-made server is used that first
