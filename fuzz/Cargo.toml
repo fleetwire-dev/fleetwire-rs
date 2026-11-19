@@ -1,0 +1,52 @@
+# Fuzz targets for the parts of fleetwire that read bytes it did not write: response bodies, tokens,
+# header values and the region URL. A separate package outside the root workspace, so the normal
+# build and its dependency tree are not affected. See README.md for how to run them.
+[package]
+name = "fleetwire-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+fleetwire = { path = "../crates/fleetwire" }
+
+# Not a member of the root workspace.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+overflow-checks = true
+
+[[bin]]
+name = "redact"
+path = "fuzz_targets/redact.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "token"
+path = "fuzz_targets/token.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "region"
+path = "fuzz_targets/region.rs"
+test = false
+doc = false
+bench = false
