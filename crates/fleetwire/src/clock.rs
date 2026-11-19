@@ -102,7 +102,8 @@ mod tests {
 
     #[test]
     fn system_clock_is_within_a_second_of_std_time() {
-        // 독립 출처(std)에서 기대값을 유도한다 — SystemClock 자신을 되풀이 단언하지 않는다.
+        // Derive the expected value from an independent source (std), rather than asserting
+        // SystemClock against itself.
         let std_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before unix epoch")
@@ -122,8 +123,9 @@ mod tests {
 
     #[test]
     fn system_clock_is_constructible_without_a_unit_literal() {
-        // `#[non_exhaustive]` 는 크레이트 밖에서 `SystemClock` 리터럴 생성을 막는다.
-        // 밖에서 쓸 수 있는 생성 경로는 `Default` 뿐이므로 그것이 살아있는지 고정한다.
+        // `#[non_exhaustive]` stops code outside the crate from building `SystemClock` with a
+        // literal. `Default` is the only construction path usable from outside, so this pins
+        // that it is still there.
         let a = SystemClock::default().now_unix();
         let b = SystemClock.now_unix();
         assert!(a.abs_diff(b) <= 1, "default={a} literal={b}");
@@ -131,29 +133,30 @@ mod tests {
 
     #[test]
     fn pre_epoch_time_saturates_high_not_low() {
-        // 이 분기는 Fix round 1 이전까지 테스트가 없었고, 그래서 값이 뒤집힌 채
-        // 살아남았다. `is_fresh` 는 `expires_at > now + skew` 이므로 **작은 now 가
-        // 토큰을 더 신선해 보이게** 만든다 — 0 은 "항상 fresh"(죽은 토큰을 계속
-        // 실어 보냄)라는 정반대 방향이다.
+        // This branch had no test until Fix round 1, which is how it survived with the value
+        // the wrong way round. `is_fresh` is `expires_at > now + skew`, so **a small now makes
+        // a token look fresher** — 0 is the exact opposite direction, "always fresh" (a dead
+        // token keeps being sent).
         let pre_epoch = std::time::UNIX_EPOCH - std::time::Duration::from_secs(1);
         assert_eq!(
             secs_since_epoch(pre_epoch),
             u64::MAX,
-            "epoch 이전 시각은 u64::MAX(=모든 토큰 만료)로 포화해야 한다"
+            "a time before the epoch should saturate to u64::MAX (= every token expired)"
         );
     }
 
     #[test]
     fn secs_since_epoch_agrees_with_std_for_a_normal_time() {
-        // 포화 분기만 보면 항상 u64::MAX 를 돌려주는 구현도 통과한다.
+        // Checking only the saturation branch would also pass an implementation that always
+        // returns u64::MAX.
         let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
         assert_eq!(secs_since_epoch(t), 1_700_000_000);
     }
 
     #[test]
     fn clock_is_shareable_across_threads_as_a_trait_object() {
-        // `TokenManager` 는 시계를 공유 클라이언트에 담는다. 그걸 합법으로 만드는 건
-        // `Clock` 의 `Send + Sync` 상위 trait 이며, 떼면 여기서 컴파일이 깨진다.
+        // `TokenManager` keeps the clock inside a shared client. What makes that legal is the
+        // `Send + Sync` supertraits of `Clock`; remove them and compilation breaks here.
         let clock: std::sync::Arc<dyn Clock> = std::sync::Arc::new(SystemClock);
         let seen = std::thread::spawn(move || clock.now_unix())
             .join()

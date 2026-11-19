@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use crate::matchers::{any, body_string_contains, header, method, path};
 use crate::{Mock, MockServer, ResponseTemplate};
 
-/// 날 요청을 그대로 보내고 응답 전체를 문자열로 받습니다.
+/// Sends a raw request as it is and returns the whole response as a string.
 fn raw(server: &MockServer, req: &str) -> String {
     let mut s = TcpStream::connect(server.address()).unwrap();
     s.write_all(req.as_bytes()).unwrap();
@@ -96,7 +96,8 @@ fn verify_panics_on_unmet_expectation() {
 
 #[test]
 fn drop_does_not_double_panic_while_unwinding() {
-    // 음성 대조: Drop 이 panicking() 을 보지 않으면 이 시험은 abort 로 프로세스를 죽입니다.
+    // Negative control: if Drop did not check panicking(), this test would kill the process
+    // with an abort.
     let r = std::panic::catch_unwind(|| {
         let server = MockServer::start();
         Mock::given(any())
@@ -155,7 +156,7 @@ fn concurrent_connections_are_served_in_parallel() {
             s.spawn(|| raw(&server, "GET / HTTP/1.1\r\nHost: a\r\n\r\n"));
         }
     });
-    // 연결마다 스레드가 없으면 300ms × 4 = 1.2s 이상 걸립니다.
+    // Without a thread per connection this takes at least 300ms x 4 = 1.2s.
     assert!(
         t.elapsed() < Duration::from_millis(900),
         "{:?}",

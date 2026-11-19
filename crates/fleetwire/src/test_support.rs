@@ -25,12 +25,13 @@ use std::path::{Path, PathBuf};
 /// runs, so every test using it fails without ever reaching the code path it
 /// meant to exercise.
 ///
-/// 이 값은 **가드**다 — 살아 있는 동안만 디렉터리가 존재한다. 즉시 버리는 형태
-/// (`let _ = temp_dir("x");` · `temp_dir("x").join(..)`)를 쓰면 테스트 도중 디렉터리가
-/// 사라진다. 반드시 이름 있는 바인딩(`let dir = temp_dir("x");`)으로 받을 것.
+/// This value is a **guard** — the directory exists only while it is alive. A form that
+/// drops it at once (`let _ = temp_dir("x");` or `temp_dir("x").join(..)`) makes the
+/// directory disappear in the middle of the test. Always take it in a named binding
+/// (`let dir = temp_dir("x");`).
 ///
-/// `Deref<Target = Path>` 이므로 `dir.join(..)`·`&dir` 는 그대로 쓸 수 있다. 소유
-/// `PathBuf` 가 필요한 자리에서는 `dir.to_path_buf()` — 가드 바인딩은 살려 둘 것.
+/// It is `Deref<Target = Path>`, so `dir.join(..)` and `&dir` work as they are. Where an
+/// owned `PathBuf` is needed, use `dir.to_path_buf()` — and keep the guard binding alive.
 pub(crate) struct TempDir(PathBuf);
 
 impl std::ops::Deref for TempDir {
@@ -47,44 +48,47 @@ impl AsRef<Path> for TempDir {
 }
 
 impl Drop for TempDir {
-    /// 지우기 **전에** 권한을 되돌린다 — 쓰기 금지 디렉터리를 만드는 테스트가
-    /// 패닉으로 중단되면 0500 인 채로 여기 들어오고, 그러면 `remove_dir_all` 이
-    /// 조용히 실패해 누수가 그대로 남는다(생성 경로에 있던 가드와 같은 것).
+    /// Restores the permissions **before** removing — when a test that makes a
+    /// write-protected directory is cut short by a panic, the directory arrives here still
+    /// 0500, and then `remove_dir_all` fails silently and the leak stays as it is (the same
+    /// guard that was on the creation path).
     ///
-    /// 여기서 절대 패닉하지 않는다 — 패닉 언와인딩 중에 `Drop` 이 다시 패닉하면
-    /// 이중 패닉으로 프로세스가 SIGABRT 로 죽어 실패한 테스트의 진단이 사라진다.
-    /// 그래서 모든 실패를 `let _ =` 로 삼킨다.
+    /// Never panics here — if `Drop` panics again while a panic is unwinding, the double
+    /// panic kills the process with SIGABRT and the failed test's diagnostics are lost.
+    /// So every failure is swallowed with `let _ =`.
     fn drop(&mut self) {
         let _ = std::fs::set_permissions(&self.0, std::fs::Permissions::from_mode(0o700));
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
-/// [`TempDir`] 하나를 만든다.
+/// Creates one [`TempDir`].
 ///
-/// 만들기 전에 지우고 다시 만든다. 이제는 `Drop` 이 정상 경로를 청소하므로 이
-/// 사전 삭제가 잡는 것은 **좁다**: 같은 pid 를 재사용한 다른 실행이 SIGKILL·SIGSEGV
-/// 로 죽어 `Drop` 조차 돌지 못하고 남긴 잔여물뿐이다.
+/// It removes the directory before creating it again. Now that `Drop` cleans up the normal
+/// path, what this pre-delete catches is **narrow**: only the leftovers of another run that
+/// reused the same pid and was killed by SIGKILL or SIGSEGV, so that not even `Drop` ran.
 ///
-/// 예전 doc 은 "pid/thread id 는 실행 간 재사용되므로 사전 삭제가 이전 실행의
-/// 잔여물을 치운다" 고 적었는데 **그 논증은 틀렸다.** pid 는 `cargo test` 실행마다
-/// 바뀌므로 이름이 거의 매칭되지 않고, 그래서 사전 삭제는 사실상 아무것도 치우지
-/// 못한 채 (실행 × 태그 × 스레드)마다 디렉터리가 하나씩 영구 누적됐다.
+/// The old doc said "pid/thread id are reused across runs, so the pre-delete clears the
+/// previous run's leftovers", but **that argument was wrong.** The pid changes on every
+/// `cargo test` run, so the names almost never match, and so the pre-delete cleared
+/// practically nothing while one directory per (run x tag x thread) piled up for good.
 ///
-/// **사고의 실측치는 여기 한 곳에만 적는다**(2026-08-13 KST, 다른 세션 계측).
-/// `/tmp` 최상위 `fleetwire-*` 가 **77,890 개**(05:39 분류 실측). 이것은 하한이다 —
-/// 그 시점엔 `systemd-tmpfiles` 가 이미 10분째 지우고 있었고, 부팅 시점 실제값은
-/// **77,890 ~ 83,585** 구간, 단일 점으로는 **약 8만**. (최초 보고된 "약 97,000" 은
-/// 뺄셈 오류로 **철회됐다** — 다른 크레이트의 가드 doc 이 그 수를 복제하고 있었기에
-/// 여기로 모았다. 숫자를 다시 퍼뜨리지 말 것.) 그 결과 부팅 시 `systemd-tmpfiles` 가
-/// 약 30건/초로 지우느라 `sysinit.target` 을 **76분** 막았고, 뒤따르던
-/// `cron`·`docker`·`dbus` 가 전부 대기해 운영 cron 이 유실됐다.
+/// **The measured figures of the incident are written in this one place only**
+/// (2026-08-13 KST, measured by another session). There were **77,890** `fleetwire-*`
+/// entries at the top level of `/tmp` (measured by classification at 05:39). That is a
+/// lower bound — by then `systemd-tmpfiles` had already been deleting for 10 minutes, and
+/// the real value at boot lies in the range **77,890 to 83,585**, or **about 80,000** as a
+/// single point. (The "about 97,000" first reported was **withdrawn** as a subtraction
+/// error — guard docs in other crates were duplicating that number, so they were gathered
+/// here. Do not spread the number again.) As a result, at boot `systemd-tmpfiles` blocked
+/// `sysinit.target` for **76 minutes** while deleting at about 30 entries per second, and
+/// `cron`, `docker` and `dbus` behind it all waited, so production cron runs were lost.
 ///
-/// **청소를 보장하는 것은 `Drop` 이다** — 사전 삭제가 아니다.
+/// **What guarantees the cleanup is `Drop`** — not the pre-delete.
 ///
-/// `Drop` 은 SIGKILL·강제중단에서는 돌지 않는다. 그 경로로 죽으면 그 실행분은
-/// 그대로 남는다(사전 삭제가 pid 재사용 시에만 좁게 회수). 스위트가 정상 종료하는
-/// 한 증가분은 0 이다 — 그것이 이 파일의 계약이다.
+/// `Drop` does not run on SIGKILL or a forced abort. A run that dies that way leaves its
+/// directories behind (the pre-delete reclaims them only narrowly, on pid reuse). As long
+/// as the suite exits normally the increase is 0 — that is this file's contract.
 pub(crate) fn temp_dir(tag: &str) -> TempDir {
     let dir = std::env::temp_dir().join(format!(
         "fleetwire-test-support-{tag}-{}-{:?}",

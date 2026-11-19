@@ -433,7 +433,7 @@ fn extract_error_description(header: &str) -> Option<String> {
             _ => out.push(c),
         }
     }
-    None // 닫는 따옴표가 없으면 신뢰하지 않는다
+    None // without a closing quote the value is not trusted
 }
 
 #[cfg(test)]
@@ -1157,7 +1157,7 @@ mod tests {
         )
         .err()
         .unwrap();
-        assert!(e.to_string().contains("invalid [REDACTED]"), "실제: {e}");
+        assert!(e.to_string().contains("invalid [REDACTED]"), "actual: {e}");
     }
 
     /// Measured E1 case B — when the body is empty, the error_description in
@@ -1176,7 +1176,7 @@ mod tests {
         .err().unwrap();
         assert!(
             e.to_string().contains("The access token is invalid"),
-            "실제: {e}"
+            "actual: {e}"
         );
     }
 
@@ -1193,7 +1193,7 @@ mod tests {
         )
         .err()
         .unwrap();
-        assert!(e.to_string().contains("Bad Gateway"), "실제: {e}");
+        assert!(e.to_string().contains("Bad Gateway"), "actual: {e}");
     }
 
     /// Mutation-test addition (M1 strengthening, not in the brief): the two
@@ -1215,8 +1215,8 @@ mod tests {
         )
         .err()
         .unwrap();
-        assert!(e.to_string().contains("body wins"), "실제: {e}");
-        assert!(!e.to_string().contains("header loses"), "실제: {e}");
+        assert!(e.to_string().contains("body wins"), "actual: {e}");
+        assert!(!e.to_string().contains("header loses"), "actual: {e}");
     }
 
     /// 401 + text/html + 0 bytes does not leak out as Decode (this prevents billing
@@ -1234,7 +1234,7 @@ mod tests {
         )
         .err()
         .unwrap();
-        assert!(matches!(e, Error::Auth { .. }), "실제: {e:?}");
+        assert!(matches!(e, Error::Auth { .. }), "actual: {e:?}");
         assert!(matches!(e.billing(), crate::pricing::Billing::Billed));
     }
 
@@ -1277,12 +1277,12 @@ mod tests {
         };
         let out = format!("{d:?}");
         for needle in ["918273", "645129", "837465", "192837", "564738", "291837"] {
-            assert!(!out.contains(needle), "실제: {out}");
+            assert!(!out.contains(needle), "actual: {out}");
         }
         // The presence signal itself must still survive — this isn't "print
         // nothing", it's "print whether one arrived, never its contents".
-        assert!(out.contains("true"), "실제: {out}");
-        assert!(out.contains("irrelevant"), "실제: {out}");
+        assert!(out.contains("true"), "actual: {out}");
+        assert!(out.contains("irrelevant"), "actual: {out}");
     }
 
     // --- A4 Task 3: empty error_description skipped + txid preserved -------
@@ -1302,7 +1302,10 @@ mod tests {
             None,
         )
         .unwrap_err();
-        assert!(e.to_string().contains("could not be reached"), "실제: {e}");
+        assert!(
+            e.to_string().contains("could not be reached"),
+            "actual: {e}"
+        );
     }
 
     /// When both are empty, it falls back to canonical_reason.
@@ -1318,7 +1321,7 @@ mod tests {
             None,
         )
         .unwrap_err();
-        assert!(e.to_string().contains("Bad Gateway"), "실제: {e}");
+        assert!(e.to_string().contains("Bad Gateway"), "actual: {e}");
     }
 
     /// The txid of a 408 is carried on VehicleOffline.
@@ -1339,7 +1342,7 @@ mod tests {
             Error::VehicleOffline { txid, .. } => {
                 assert_eq!(txid.as_deref(), Some("432e7faaa94cf732bdda8f82f2184eea"));
             }
-            other => panic!("VehicleOffline 이어야 한다: {other:?}"),
+            other => panic!("should be VehicleOffline: {other:?}"),
         }
     }
 
@@ -1358,7 +1361,7 @@ mod tests {
         .unwrap_err();
         match e {
             Error::Api { txid, .. } => assert_eq!(txid.as_deref(), Some("hdr-txid-123")),
-            other => panic!("Api 여야 한다: {other:?}"),
+            other => panic!("should be Api: {other:?}"),
         }
     }
 
@@ -1384,7 +1387,7 @@ mod tests {
         .unwrap_err();
         match e {
             Error::Api { txid, .. } => assert_eq!(txid.as_deref(), Some("body-txid-wins")),
-            other => panic!("Api 여야 한다: {other:?}"),
+            other => panic!("should be Api: {other:?}"),
         }
     }
 
@@ -1410,7 +1413,7 @@ mod tests {
             Error::Api { txid, .. } => {
                 assert_eq!(txid.as_deref(), Some("432e7faaa94cf732bdda8f82f2184eea"));
             }
-            other => panic!("Api 여야 한다: {other:?}"),
+            other => panic!("should be Api: {other:?}"),
         }
     }
 
@@ -1449,7 +1452,7 @@ mod tests {
             Error::Api { txid, .. } => {
                 assert_eq!(txid.as_deref(), Some("5YJ3E1EA1JF000001"));
             }
-            other => panic!("Api 여야 한다: {other:?}"),
+            other => panic!("should be Api: {other:?}"),
         }
         assert!(
             format!("{e:?}").contains("5YJ3E1EA1JF000001"),
@@ -1486,7 +1489,7 @@ mod tests {
             Error::VehicleOffline { txid, .. } => {
                 assert_eq!(txid.as_deref(), Some("5YJ3E1EA1JF000001"));
             }
-            other => panic!("VehicleOffline 이어야 한다: {other:?}"),
+            other => panic!("should be VehicleOffline: {other:?}"),
         }
         assert!(
             format!("{e:?}").contains("5YJ3E1EA1JF000001"),
@@ -1511,7 +1514,7 @@ mod tests {
                     Some("Bearer eyJhbGciOiJIUzI1NiJ9.raw-secret-value.sig")
                 );
             }
-            other => panic!("VehicleOffline 이어야 한다: {other:?}"),
+            other => panic!("should be VehicleOffline: {other:?}"),
         }
         assert!(
             format!("{e2:?}").contains("raw-secret-value"),
@@ -1533,7 +1536,7 @@ mod tests {
         .unwrap_err();
         assert!(
             format!("{e:?}").contains("432e7faa"),
-            "txid 가 사라졌다: {e:?}"
+            "the txid is gone: {e:?}"
         );
     }
 

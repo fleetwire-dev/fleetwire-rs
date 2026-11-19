@@ -6,7 +6,7 @@ use fleetwire_testkit::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 
-/// 읽을 때마다 `gap` 을 쉬고 1바이트를 내는 리더입니다(느린 서버 흉내).
+/// A reader that pauses for `gap` on every read and yields 1 byte (imitates a slow server).
 struct Trickle {
     left: usize,
     gap: Duration,
@@ -24,7 +24,8 @@ impl Read for Trickle {
     }
 }
 
-/// 읽힌 횟수를 세는 리더입니다. 상한을 넘은 뒤 다시 불리지 않는지 봅니다.
+/// A reader that counts how many times it is read. It shows whether it is called again after
+/// the cap is exceeded.
 struct Counting {
     reads: usize,
 }
@@ -59,7 +60,8 @@ fn read_capped_rejects_max_plus_one() {
 
 #[test]
 fn read_capped_stops_reading_once_the_cap_is_exceeded() {
-    // 끝없는 리더: 상한 검사가 누적 중에 일어나지 않으면 이 시험은 끝나지 않습니다.
+    // An endless reader: unless the cap check happens while accumulating, this test never
+    // finishes.
     let mut r = Counting { reads: 0 };
     assert!(matches!(
         read_capped(&mut r, 10, far()),
@@ -70,7 +72,8 @@ fn read_capped_stops_reading_once_the_cap_is_exceeded() {
 
 #[test]
 fn read_capped_stops_a_trickling_body_at_the_deadline() {
-    // 음성 대조: 마감 검사를 지우면 이 시험은 10초 넘게 걸리다 끝납니다.
+    // Negative control: with the deadline check removed, this test takes more than 10 seconds
+    // before it finishes.
     let mut r = Trickle {
         left: 10_000,
         gap: Duration::from_millis(1),
@@ -87,8 +90,10 @@ fn read_capped_stops_a_trickling_body_at_the_deadline() {
 
 #[test]
 fn classify_refused_connection_is_not_sent() {
-    // 1번 포트는 특권 포트라 다른 시험이 잡을 수 없고 보통 듣는 곳이 없어 늘 거부됩니다. 빈 포트를 잡았다 놓던 방식은
-    // 그 사이 다른 시험이 같은 포트를 잡으면 실패했습니다(2026-10-14 MSRV 1회). `fleetwire-notify` 의 `CLOSED_URL` 과 같습니다.
+    // Port 1 is a privileged port, so no other test can bind it, and normally nothing listens
+    // there, so a connection is always refused. The earlier approach of binding a free port and
+    // releasing it failed when another test bound the same port in between (once on 2026-10-14,
+    // MSRV). Same as `CLOSED_URL` in `fleetwire-notify`.
     let e = agent(Duration::from_secs(2))
         .get("http://127.0.0.1:1/")
         .call()
@@ -149,21 +154,25 @@ fn agent_returns_error_statuses_as_responses() {
     assert_eq!(resp.status().as_u16(), 503);
 }
 
-/// 자식 프로세스에서만 도는 쪽입니다. 부모가 `HTTPS_PROXY` 를 준 채 이 시험 하나만 다시 실행합니다.
+/// Selects the side that runs only in the child process. The parent re-runs just this one test
+/// with `HTTPS_PROXY` set.
 const PROXY_PROBE_ENV: &str = "FLEETWIRE_PROXY_PROBE_CHILD";
 
 #[test]
 fn agent_ignores_proxy_env() {
     if std::env::var_os(PROXY_PROBE_ENV).is_some() {
-        // ureq 는 Agent 설정을 만들 때 환경 변수 프록시를 읽습니다. `.proxy(None)` 이 그것을 지워야 합니다.
+        // ureq reads the proxy from the environment variables when it builds the Agent config.
+        // `.proxy(None)` must clear it.
         assert!(
             agent(Duration::from_secs(1)).config().proxy().is_none(),
             "the agent picked up the proxy from the environment"
         );
         return;
     }
-    // 부모: 같은 시험 바이너리를 프록시 환경 변수와 함께 다시 실행합니다(`set_var` 는 unsafe 라 쓰지 않습니다).
-    // 음성 대조: `net::agent` 에서 `.proxy(None)` 을 지우면 자식이 실패해 이 시험이 실패합니다(최종 검토 M-1).
+    // Parent: re-runs the same test binary with the proxy environment variables (`set_var` is
+    // unsafe, so it is not used).
+    // Negative control: removing `.proxy(None)` from `net::agent` makes the child fail, and so
+    // this test fails (final review M-1).
     let exe = std::env::current_exe().expect("test binary path should be known");
     let out = std::process::Command::new(exe)
         .args([
@@ -191,7 +200,7 @@ fn redact_ureq_error_drops_the_query() {
     assert!(!redact_ureq_error(&e).contains("SECRET"));
 }
 
-/// 읽기 오류를 그대로 돌려주는 리더입니다.
+/// A reader that simply returns a read error.
 struct Broken;
 
 impl Read for Broken {

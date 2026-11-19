@@ -39,7 +39,7 @@ fn the_default_token_url_is_the_fleet_auth_host_not_auth_tesla_com() {
     assert_eq!(r.token_url.scheme(), "https");
 }
 
-/// 성공 경로 — form-urlencoded, public client(secret 없음).
+/// The success path — form-urlencoded, public client (no secret).
 #[test]
 fn posts_form_urlencoded_without_client_secret() {
     let server = MockServer::start();
@@ -60,7 +60,7 @@ fn posts_form_urlencoded_without_client_secret() {
     assert_eq!(got.expires_in_secs, 28_800);
 }
 
-/// client_secret 을 절대 보내지 않는다(public client).
+/// The client_secret is never sent (public client).
 #[test]
 fn never_sends_client_secret() {
     let server = MockServer::start();
@@ -75,10 +75,10 @@ fn never_sends_client_secret() {
 
     let reqs = server.received_requests().unwrap();
     let body = String::from_utf8_lossy(&reqs[0].body).to_string();
-    assert!(!body.contains("client_secret"), "본문: {body}");
+    assert!(!body.contains("client_secret"), "body: {body}");
 }
 
-/// OAuth 오류 응답이 리댁션된 Error 로 올라온다.
+/// An OAuth error response comes up as a redacted Error.
 #[test]
 fn oauth_error_becomes_error_not_panic() {
     let server = MockServer::start();
@@ -90,10 +90,10 @@ fn oauth_error_becomes_error_not_panic() {
         .mount(&server);
 
     let e = refresher(&server).refresh("old-r").unwrap_err();
-    assert!(e.to_string().contains("invalid_grant"), "실제: {e}");
+    assert!(e.to_string().contains("invalid_grant"), "actual: {e}");
 }
 
-/// 토큰이 에러 메시지에 새지 않는다.
+/// The token does not leak into the error message.
 #[test]
 fn refresh_token_never_appears_in_error() {
     let server = MockServer::start();
@@ -106,14 +106,15 @@ fn refresh_token_never_appears_in_error() {
         .unwrap_err();
     assert!(
         !format!("{e}{e:?}").contains("SUPERSECRET-REFRESH"),
-        "실제: {e:?}"
+        "actual: {e:?}"
     );
 }
 
-/// M4 킬: redirect 를 따라가면 자격증명(토큰)이 다른 호스트로 넘어간다.
-/// `redirect::Policy::none()` 이 실제로 걸려 있는지, 두 번째 서버가
-/// **요청을 전혀 받지 않는 것**으로 확인한다 — 첫 응답 body 파싱 실패는
-/// 부수 효과일 뿐이고, 여기서 세는 것은 두 번째 서버의 요청 수(mechanism)다.
+/// M4 kill: following a redirect hands the credentials (the token) to another host.
+/// Whether `redirect::Policy::none()` is really in effect is confirmed by the second
+/// server **receiving no request at all** — the failure to parse the first response body
+/// is only a side effect, and what is counted here is the number of requests at the second
+/// server (the mechanism).
 #[test]
 fn does_not_follow_redirect_to_second_host() {
     let redirect_target = MockServer::start();
@@ -133,27 +134,28 @@ fn does_not_follow_redirect_to_second_host() {
         ))
         .mount(&server);
 
-    // redirect 를 따라갔다면 200 을 파싱해서 성공했을 것이다. 따라가지
-    // 않으므로 302 자체가 에러가 된다 — 그 값 자체는 부차적이다.
+    // Had the redirect been followed, the 200 would have been parsed and the call would have
+    // succeeded. It is not followed, so the 302 itself becomes an error — that value itself
+    // is secondary.
     let _ = refresher(&server).refresh("old-r");
 
     let redirected_reqs = redirect_target.received_requests().unwrap();
     assert_eq!(
         redirected_reqs.len(),
         0,
-        "리다이렉트 대상 서버가 요청을 받았다 — redirect::Policy::none() 이 걸리지 않았다"
+        "the redirect target received a request — redirect::Policy::none() is not in effect"
     );
 }
 
-/// review round 1 critical #1 킬: 헤더는 즉시 오고 본문만 멈추는 응답을
-/// 재현한다. `wiremock::ResponseTemplate::set_delay` 는 쓸 수 없다 —
-/// wiremock 0.6 은 응답을 언제나 완성된 `Full<Bytes>` 로 통째로 만든
-/// 뒤 지연시키므로(response_template.rs), "헤더는 빠르고 본문만 느림"
-/// 을 표현하지 못하고 delay 를 걸면 헤더 수신 자체(=`send()`)가 늦어져
-/// 예전(버그) 코드도 `send()` 만 감싼 timeout 에 이미 걸려버린다 —
-/// 즉 그 방법으로는 이 회귀를 구별하지 못한다. 그래서 원시 TCP 로 헤더를
-/// 먼저 완전히 보내고(`send()` 를 즉시 resolve 시킨 뒤) 본문은 영원히
-/// 보내지 않는 손으로 만든 서버를 쓴다.
+/// review round 1 critical #1 kill: reproduces a response whose headers arrive at once and
+/// whose body alone stalls. `wiremock::ResponseTemplate::set_delay` cannot be used —
+/// wiremock 0.6 always builds the response whole as a completed `Full<Bytes>` and only then
+/// delays it (response_template.rs), so it cannot express "fast headers, slow body only";
+/// setting a delay makes the receipt of the headers itself (= `send()`) late, so the old
+/// (buggy) code is also already caught by the timeout that wrapped only `send()` — that is,
+/// that method cannot tell this regression apart. So a hand-made server is used that first
+/// sends the headers completely over raw TCP (resolving `send()` at once) and never sends
+/// the body.
 #[test]
 fn timeout_bounds_the_body_read_not_just_the_headers() {
     use std::io::{Read, Write};
@@ -164,21 +166,21 @@ fn timeout_bounds_the_body_read_not_just_the_headers() {
     std::thread::spawn(move || {
         let (mut socket, _) = listener.accept().unwrap();
         let mut buf = [0u8; 4096];
-        // 요청을 헤더 끝까지만 대충 흘려보냅니다.
+        // Roughly drain the request, only up to the end of the headers.
         loop {
             let n = socket.read(&mut buf).unwrap_or(0);
             if n == 0 || buf[..n].windows(4).any(|w| w == b"\r\n\r\n") {
                 break;
             }
         }
-        // 헤더는 완전하고 즉시 보냅니다 — 요청 호출은 이 시점에 돌아옵니다.
+        // The headers are sent complete and at once — the request call returns at this point.
         socket
             .write_all(
                 b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 60\r\n\r\n",
             )
             .unwrap();
         socket.flush().unwrap();
-        // 본문은 보내지 않습니다 — 시험이 끝나면 프로세스와 함께 사라집니다.
+        // The body is never sent — this thread goes away with the process when the test ends.
         std::thread::sleep(Duration::from_secs(30));
     });
 
@@ -193,15 +195,17 @@ fn timeout_bounds_the_body_read_not_just_the_headers() {
     let e = refresher.refresh("old-r").unwrap_err();
     let elapsed = start.elapsed();
 
-    assert!(e.to_string().contains("timed out"), "실제: {e}");
-    // 값이 아니라 매커니즘을 단언한다(규율 3): 헤더만 감싼 예전 코드라면
-    // `send()` 는 수 ms 만에 끝나고 이후 `bytes()` 가 무제한으로
-    // 걸려 서버의 30초 sleep 까지 매달렸을 것이다. 하나의 timeout 이라면
-    // 설정한 200ms 근처에서 반환되어야 합니다. 다만 `read_capped` 는 마감을 읽기 한 번(약 1초)까지 넘길 수
-    // 있다고 약속합니다(`net.rs` 의 `read_capped` 문서). 상한은 그 약속 + 지터 1초 = 2.2초로 둡니다
-    // (10-28 verify 부하에서 1초 상한이 1.202초 = 200ms + 읽기 한 번으로 실패했습니다). 30초와는 여전히 13배 차이입니다.
+    assert!(e.to_string().contains("timed out"), "actual: {e}");
+    // This asserts the mechanism, not the value (discipline 3): with the old code that
+    // wrapped only the headers, `send()` would finish within a few ms and the following
+    // `bytes()` would then block without limit, hanging until the server's 30-second sleep.
+    // With a single timeout it must return near the configured 200ms. However, `read_capped`
+    // promises that it may overrun the deadline by up to one read (about 1 second) (the
+    // `read_capped` docs in `net.rs`). The upper bound is set to that promise + 1 second of
+    // jitter = 2.2 seconds (under the 10-28 verify load a 1-second upper bound failed at
+    // 1.202 seconds = 200ms + one read). That is still a 13-fold difference from 30 seconds.
     assert!(
         elapsed < Duration::from_millis(200) + Duration::from_secs(2),
-        "본문 읽기가 timeout 에 감싸이지 않았다 — 경과 {elapsed:?}"
+        "the body read is not wrapped by the timeout — elapsed {elapsed:?}"
     );
 }

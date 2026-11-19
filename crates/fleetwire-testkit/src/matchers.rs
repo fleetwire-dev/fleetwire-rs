@@ -1,4 +1,4 @@
-//! wiremock 과 같은 이름의 매처입니다.
+//! Matchers with the same names as wiremock's.
 
 use crate::{Match, Request};
 
@@ -9,7 +9,7 @@ impl Match for MethodIs {
     }
 }
 
-/// 메서드가 같으면 맞습니다(대소문자 무시).
+/// Matches when the method is the same (case-insensitive).
 pub fn method(m: impl AsRef<str>) -> impl Match + 'static {
     MethodIs(m.as_ref().to_owned())
 }
@@ -21,7 +21,7 @@ impl Match for PathIs {
     }
 }
 
-/// 경로가 정확히 같으면 맞습니다(질의 문자열은 보지 않습니다).
+/// Matches when the path is exactly the same (the query string is not looked at).
 pub fn path(p: impl AsRef<str>) -> impl Match + 'static {
     PathIs(p.as_ref().to_owned())
 }
@@ -33,7 +33,7 @@ impl Match for HeaderIs {
     }
 }
 
-/// 헤더 값이 정확히 같으면 맞습니다(이름은 대소문자 무시).
+/// Matches when the header value is exactly the same (the name is case-insensitive).
 pub fn header(name: impl AsRef<str>, value: impl AsRef<str>) -> impl Match + 'static {
     HeaderIs(name.as_ref().to_owned(), value.as_ref().to_owned())
 }
@@ -45,7 +45,7 @@ impl Match for Any {
     }
 }
 
-/// 언제나 맞습니다.
+/// Always matches.
 pub fn any() -> impl Match + 'static {
     Any
 }
@@ -57,7 +57,7 @@ impl Match for BodyContains {
     }
 }
 
-/// 본문(UTF-8 손실 변환)에 문자열이 들어 있으면 맞습니다.
+/// Matches when the body (lossy UTF-8 conversion) contains the string.
 pub fn body_string_contains(s: &str) -> impl Match + 'static {
     BodyContains(s.to_owned())
 }

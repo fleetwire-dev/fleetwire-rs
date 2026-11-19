@@ -43,23 +43,24 @@ pub(crate) struct TokenSet {
 
 impl core::fmt::Debug for TokenSet {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // 구조분해가 이 impl 의 안전장치다: 필드를 추가하면 여기서 `E0027`
-        // (pattern does not mention field) 로 컴파일이 깨진다. `self.field` 로
-        // 접근했다면 새 필드가 조용히 출력에서 빠지고 어떤 테스트도 실패하지 않는다.
-        // `: _` 는 "값을 의도적으로 찍지 않는다" 는 표시다.
+        // The destructuring is the safety device of this impl: adding a field breaks
+        // compilation here with `E0027` (pattern does not mention field). Had the fields been
+        // accessed as `self.field`, a new field would silently drop out of the output and no
+        // test would fail. `: _` marks "the value is deliberately not printed".
         let Self {
             access_token: _,
             refresh_token: _,
             expires_at,
             extra,
         } = self;
-        // 마커는 크레이트 단일 리댁션 계층의 상수를 쓴다(REQ-18) — 여기서
-        // 문자열을 다시 적으면 출처가 둘로 갈라진다.
+        // The marker uses the constant of the crate's single redaction layer (REQ-18) —
+        // writing the string again here would split the source into two.
         f.debug_struct("TokenSet")
             .field("access_token", &REDACTED)
             .field("refresh_token", &REDACTED)
             .field("expires_at", expires_at)
-            // `extra` 는 개수만 — 신버전이 넣은 미지 필드가 비밀일 수 있다.
+            // Only the count of `extra` — an unknown field put in by a newer version may be a
+            // secret.
             .field("extra_keys", &extra.len())
             .finish()
     }
@@ -213,7 +214,7 @@ impl TokenStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(StoreError::NotFound),
             Err(e) => return Err(StoreError::Io(e)),
         };
-        // symlink_metadata 는 링크를 따라가지 않으므로 링크 자체를 판별할 수 있다.
+        // symlink_metadata does not follow links, so the link itself can be identified.
         if pre.file_type().is_symlink() {
             return Err(StoreError::Symlink);
         }
@@ -222,12 +223,12 @@ impl TokenStore {
         }
 
         let mut file = File::open(&path)?;
-        // 열린 것이 방금 검사한 바로 그 파일인가.
+        // Is what was opened the very file that was just checked?
         let opened = file.metadata()?;
         if opened.ino() != pre.ino() || opened.dev() != pre.dev() {
             return Err(StoreError::Symlink);
         }
-        // 권한은 경로가 아니라 **연 핸들** 기준으로 본다.
+        // Permissions are checked on the **opened handle**, not on the path.
         if opened.permissions().mode() & 0o077 != 0 {
             return Err(StoreError::BadPermissions);
         }
@@ -259,10 +260,11 @@ impl TokenStore {
         }
 
         let tmp_path = self.temp_path();
-        // 이전 실행이 남긴 잔여물이 있으면 O_EXCL 이 EEXIST 로 실패해 저장이
-        // 영구히 막히므로 먼저 치운다. 다만 **symlink 는 치우지 않고 거부**한다 —
-        // 우리가 만드는 것은 언제나 평범한 파일이므로, 임시 경로의 링크는
-        // 잔여물이 아니라 공격이다. 조용히 지우고 진행하면 흔적만 지우는 셈이다.
+        // If a previous run left something behind, O_EXCL would fail with EEXIST and saving
+        // would be blocked permanently, so it is cleared first. However, **a symlink is
+        // refused, not cleared** — what we create is always a plain file, so a link at the
+        // temporary path is not a leftover but an attack. Silently deleting it and carrying on
+        // would amount to erasing only the traces.
         match std::fs::symlink_metadata(&tmp_path) {
             Ok(m) if m.file_type().is_symlink() => return Err(StoreError::Symlink),
             Ok(_) => drop(std::fs::remove_file(&tmp_path)),
@@ -271,11 +273,13 @@ impl TokenStore {
 
         let json = serde_json::to_vec(set).map_err(|_| StoreError::Malformed)?;
 
-        // 실패하면 어느 단계에서 실패했든 임시 파일을 남기지 않는다. 성공 경로만
-        // 정리하는 구현은 저장이 실패할 때마다 토큰 디렉터리에 `.tmp` 를 흘린다.
+        // On failure, whichever stage failed, no temporary file is left behind. An
+        // implementation that cleans up only on the success path leaks a `.tmp` into the token
+        // directory every time a save fails.
         let outcome = Self::write_then_swap(&tmp_path, &final_path, &json, &self.dir);
         if outcome.is_err() {
-            // rename 이 성공한 뒤(fsync 단계)에 실패했다면 이미 없는 파일이다 — no-op.
+            // If it failed after the rename succeeded (at the fsync stage), the file is already
+            // gone — a no-op.
             drop(std::fs::remove_file(&tmp_path));
         }
         outcome
@@ -333,13 +337,14 @@ impl TokenStore {
     fn ensure_private_dir(dir: &Path) -> Result<(), StoreError> {
         let meta = match std::fs::symlink_metadata(dir) {
             Ok(m) => m,
-            // 디렉터리가 없다 = 아직 로그인 안 함. `load` 가 이 값을 그대로 쓴다.
+            // No directory = not logged in yet. `load` uses this value as is.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(StoreError::NotFound),
             Err(e) => return Err(StoreError::Io(e)),
         };
-        // 파일 쪽(`load`)과 같은 방침: 따라가지 않고 거부한다. symlink 의 mode 는
-        // 보통 0777 이라 아래 권한 검사에도 걸리기는 하지만, 그러면 사용자는 진짜
-        // 원인(링크) 대신 "권한이 헐겁다" 를 보고 헛되이 chmod 를 시도하게 된다.
+        // The same policy as the file side (`load`): refuse rather than follow. The mode of a
+        // symlink is usually 0777, so the permission check below would catch it as well, but
+        // then the user would see "the permissions are too permissive" instead of the real
+        // cause (the link) and try chmod in vain.
         if meta.file_type().is_symlink() {
             return Err(StoreError::Symlink);
         }
@@ -366,13 +371,15 @@ impl TokenStore {
         dir: &Path,
     ) -> Result<(), StoreError> {
         {
-            // create_new(true) = O_CREAT|O_EXCL. POSIX 상 경로가 symlink 면 링크
-            // 내용과 무관하게 EEXIST 로 실패하므로, 이것만으로 임시 파일의
-            // symlink 방어가 성립한다(O_NOFOLLOW 불필요 — 계획 T4 머리말 참조).
-            // 위의 명시적 검사를 지나 여기 오기까지의 경합 창을 닫는 것이 이 플래그다.
+            // create_new(true) = O_CREAT|O_EXCL. Under POSIX, if the path is a symlink this
+            // fails with EEXIST regardless of what the link points to, so this alone
+            // establishes the symlink defence for the temporary file (O_NOFOLLOW is not
+            // needed — see the preamble of plan T4). This flag is what closes the race window
+            // between passing the explicit check above and arriving here.
             //
-            // `.mode(0o600)` 은 **생성 시점**에 적용된다 — 만들고 나서
-            // `set_permissions` 로 조이면 그 사이에 남이 열 수 있는 창이 생긴다.
+            // `.mode(0o600)` is applied **at creation time** — tightening with
+            // `set_permissions` after creating would open a window in which someone else
+            // could open the file.
             let mut f = OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -382,8 +389,9 @@ impl TokenStore {
             f.sync_all()?;
         }
 
-        // rename 은 대상이 symlink 여도 **따라가지 않고** 링크 자체를 대체한다.
-        // 위의 명시적 검사가 있으므로 여기 도달하면 대상은 symlink 가 아니다.
+        // Even when the target is a symlink, rename **does not follow it** and replaces the
+        // link itself. Because of the explicit check above, the target is not a symlink by the
+        // time this is reached.
         std::fs::rename(tmp_path, final_path)?;
         fsync_dir(dir)?;
         Ok(())
@@ -522,12 +530,12 @@ mod tests {
         assert_eq!(
             mode & 0o077,
             0,
-            "{what}: 소유자 외 권한 비트가 남아 있다 (mode {mode:o})"
+            "{what}: permission bits for others than the owner remain (mode {mode:o})"
         );
         assert_eq!(
             mode & 0o700 & !owner_bits,
             0,
-            "{what}: 의도한 소유자 권한({owner_bits:o})보다 넓다 (mode {mode:o})"
+            "{what}: wider than the intended owner permissions ({owner_bits:o}) (mode {mode:o})"
         );
     }
 
@@ -543,91 +551,98 @@ mod tests {
     #[test]
     fn is_fresh_is_false_inside_the_skew_window() {
         let clock = FixedClock::new(1_000);
-        // 만료가 30초 뒤 = skew(60초) 안쪽 → 미리 갱신해야 하므로 fresh 아님
+        // Expiry is 30 seconds away = inside the skew (60 seconds), so it must be refreshed
+        // ahead of time and is not fresh.
         assert!(!token_set_expiring_at(1_030).is_fresh(&clock, EXPIRY_SKEW));
-        // 만료가 90초 뒤 = skew 바깥 → fresh
+        // Expiry is 90 seconds away = outside the skew, so fresh.
         assert!(token_set_expiring_at(1_090).is_fresh(&clock, EXPIRY_SKEW));
     }
 
     #[test]
     fn is_fresh_pins_the_exact_skew_boundary() {
-        // 위 테스트(1_030 / 1_090)는 경계를 건드리지 않아 `>` 를 `>=` 로 바꿔도 통과한다.
-        // 여기서 `now + skew` 정확히 그 지점을 못박는다.
+        // The test above (1_030 / 1_090) does not touch the boundary, so it passes even if `>`
+        // is changed to `>=`. Here exactly the point `now + skew` is pinned.
         assert_eq!(
             EXPIRY_SKEW,
             Duration::from_secs(60),
-            "아래 리터럴은 skew=60초를 전제한다"
+            "the literals below assume skew=60 seconds"
         );
         let clock = FixedClock::new(1_000);
-        // 경계 바로 앞 — 여전히 skew 창 안 → fresh 아님.
+        // Just before the boundary — still inside the skew window, so not fresh.
         assert!(!token_set_expiring_at(1_059).is_fresh(&clock, EXPIRY_SKEW));
-        // 경계 정확히(`expires_at == now + skew`) — **fresh 아님**.
-        // 비교가 `>` 이지 `>=` 가 아님을 고정한다. `>=` 로 바꾸면 이 줄만 깨진다.
+        // Exactly on the boundary (`expires_at == now + skew`) — **not fresh**.
+        // This pins that the comparison is `>`, not `>=`. Changing it to `>=` breaks only this
+        // line.
         assert!(!token_set_expiring_at(1_060).is_fresh(&clock, EXPIRY_SKEW));
-        // 경계 바로 뒤 — skew 바깥 → fresh.
+        // Just after the boundary — outside the skew, so fresh.
         assert!(token_set_expiring_at(1_061).is_fresh(&clock, EXPIRY_SKEW));
     }
 
     #[test]
     fn is_fresh_uses_the_skew_argument_not_the_constant() {
-        // 인자를 무시하고 EXPIRY_SKEW 를 직접 읽는 구현은 다른 모든 테스트를 통과한다.
+        // An implementation that ignores the argument and reads EXPIRY_SKEW directly passes
+        // every other test.
         let clock = FixedClock::new(1_000);
         let ts = token_set_expiring_at(1_030);
         assert!(
             ts.is_fresh(&clock, Duration::ZERO),
-            "skew 0 이면 30초 남은 토큰은 유효"
+            "with skew 0 a token with 30 seconds left is valid"
         );
         assert!(
             !ts.is_fresh(&clock, Duration::from_secs(3_600)),
-            "skew 가 크면 같은 토큰이 만료 임박으로 뒤집혀야 한다"
+            "with a large skew the same token must flip to about-to-expire"
         );
     }
 
     #[test]
     fn is_fresh_is_false_for_already_expired_token_without_underflow() {
         let clock = FixedClock::new(2_000);
-        // expires_at < now — u64 뺄셈이 언더플로하면 panic 하거나 거대한 값이 되어 fresh 로 오판한다.
+        // expires_at < now — if a u64 subtraction underflows, it either panics or becomes a
+        // huge value and is misjudged as fresh.
         assert!(!token_set_expiring_at(1_000).is_fresh(&clock, EXPIRY_SKEW));
         assert!(!token_set_expiring_at(0).is_fresh(&clock, EXPIRY_SKEW));
     }
 
     #[test]
     fn is_fresh_does_not_overflow_when_the_clock_is_near_u64_max() {
-        // 언더플로의 반대 방향: `now + skew` 를 그냥 더하면 debug 빌드에서 패닉한다.
+        // The opposite direction of the underflow: adding `now + skew` naively panics in a
+        // debug build.
         let clock = FixedClock::new(u64::MAX - 1);
         assert!(!token_set_expiring_at(u64::MAX).is_fresh(&clock, EXPIRY_SKEW));
     }
 
     #[test]
     fn a_real_token_is_not_fresh_under_a_pre_epoch_clock() {
-        // 값 자체가 아니라 **그 값의 결과**를 못박는다 — 원래 버그(0 으로 포화)를
-        // 잡았을 성질이 바로 이것이다. 0 이면 실제 토큰이 영원히 fresh 로 읽혀
-        // 죽은 access token 을 계속 실어 보낸다.
+        // This pins not the value itself but **the consequence of that value** — this is
+        // exactly the property that would have caught the original bug (saturating to 0).
+        // With 0 a real token reads as fresh forever and a dead access token keeps being sent.
         let pre_epoch = std::time::UNIX_EPOCH - Duration::from_secs(1);
         let clock = FixedClock::new(crate::clock::secs_since_epoch(pre_epoch));
         assert!(
             !token_set_expiring_at(1_700_000_000).is_fresh(&clock, EXPIRY_SKEW),
-            "epoch 이전 시계에서는 어떤 토큰도 fresh 가 아니어야 한다(=항상 refresh)"
+            "under a pre-epoch clock no token may be fresh (= always refresh)"
         );
     }
 
     #[test]
     fn advancing_the_clock_flips_the_same_token_from_fresh_to_stale() {
-        // 어떤 테스트도 시계를 움직이지 않으면 `now_unix()` 를 상수로 하드코딩한
-        // 시계 구현이 만료 테스트를 전부 통과한다. 같은 TokenSet 하나로 전후를 본다.
+        // If no test moves the clock, a clock implementation that hardcodes `now_unix()` as a
+        // constant passes every expiry test. The same single TokenSet is checked before and
+        // after.
         let clock = FixedClock::new(1_000);
         let ts = token_set_expiring_at(1_100);
         assert!(ts.is_fresh(&clock, EXPIRY_SKEW), "1_100 > 1_000+60 → fresh");
         clock.advance(50);
         assert!(
             !ts.is_fresh(&clock, EXPIRY_SKEW),
-            "now=1_050 이면 1_100 > 1_110 이 거짓 → 같은 토큰이 stale 로 뒤집혀야 한다"
+            "with now=1_050, 1_100 > 1_110 is false, so the same token must flip to stale"
         );
     }
 
     #[test]
     fn accessors_do_not_swap_the_two_tokens() {
-        // 두 접근자가 서로 바뀐 구현은 만료·Debug·직렬화 테스트를 전부 통과한다.
+        // An implementation with the two accessors swapped passes every expiry, Debug and
+        // serialization test.
         let ts = token_set_expiring_at(1_000);
         assert_eq!(ts.access_token(), "AT");
         assert_eq!(ts.refresh_token(), "NA_RT");
@@ -650,8 +665,9 @@ mod tests {
 
     #[test]
     fn debug_marker_is_the_crate_wide_redaction_const() {
-        // REQ-18 단일 리댁션 계층: 마커를 이 파일에서 따로 하드코딩하면 출처가 둘로
-        // 갈라져 드리프트한다. `redaction::REDACTED` 를 바꾸면 여기서 잡힌다.
+        // REQ-18 single redaction layer: hardcoding the marker separately in this file would
+        // split the source into two, which then drift apart. Changing `redaction::REDACTED`
+        // is caught here.
         let rendered = format!("{:?}", token_set_expiring_at(1_000));
         assert!(
             rendered.contains(crate::redaction::REDACTED),
@@ -661,9 +677,9 @@ mod tests {
 
     #[test]
     fn debug_does_not_leak_unknown_field_values() {
-        // 두 토큰만 가리고 `extra` 를 통째로 찍는 Debug 는 위 테스트를 통과한다 —
-        // 픽스처에 미지 필드가 없기 때문이다. 신버전이 쓴 파일에는 이 버전이 모르는
-        // 비밀(예: id_token)이 들어있을 수 있다.
+        // A Debug that hides only the two tokens and prints `extra` whole passes the tests
+        // above — because the fixture has no unknown fields. A file written by a newer version
+        // may contain a secret this version does not know (e.g. id_token).
         let json = r#"{"access_token":"AT","refresh_token":"NA_RT","expires_at":1000,"id_token":"SECRET_ID_TOKEN_VALUE"}"#;
         let ts: TokenSet = serde_json::from_str(json).expect("must deserialize");
         let rendered = format!("{ts:?}");
@@ -679,7 +695,8 @@ mod tests {
 
     #[test]
     fn unknown_fields_survive_a_round_trip() {
-        // 신버전 fleetwire 가 쓴 파일을 구버전이 읽고 되쓸 때 필드를 잃지 않아야 한다.
+        // When an older version reads and rewrites a file written by a newer fleetwire, no
+        // field may be lost.
         let json =
             r#"{"access_token":"AT","refresh_token":"NA_RT","expires_at":1000,"future_field":42}"#;
         let ts: TokenSet = serde_json::from_str(json).expect("must deserialize");
@@ -689,8 +706,9 @@ mod tests {
 
     #[test]
     fn round_trip_preserves_known_fields_without_duplicating_them() {
-        // 미지 필드만 보는 위 테스트는 알려진 필드가 사라지거나 `extra` 에 중복
-        // 흡수되는 구현을 잡지 못한다.
+        // The test above, which looks only at the unknown field, does not catch an
+        // implementation in which a known field disappears or is also absorbed into `extra` as
+        // a duplicate.
         let json =
             r#"{"access_token":"AT","refresh_token":"NA_RT","expires_at":1000,"future_field":42}"#;
         let ts: TokenSet = serde_json::from_str(json).expect("must deserialize");
@@ -739,27 +757,31 @@ mod tests {
         assert_eq!(
             unexpected_entries(&dir),
             Vec::<String>::new(),
-            "임시 파일이 남았다"
+            "a temporary file was left behind"
         );
     }
 
     #[test]
     fn store_leaves_no_temp_file_behind_when_the_rename_fails() {
-        // 성공 경로만 보는 위 테스트는, 실패할 때마다 `.tmp` 를 흘리는 구현을
-        // 통과시킨다. rename 을 확실히 실패시키려면 최종 경로에 **디렉터리**를
-        // 놓는다(EISDIR) — 임시 파일이 이미 만들어진 뒤에 실패하는 지점이다.
+        // The test above, which looks only at the success path, lets through an implementation
+        // that leaks a `.tmp` on every failure. To make the rename fail for certain, a
+        // **directory** is placed at the final path (EISDIR) — a point of failure that comes
+        // after the temporary file has already been created.
         let dir = temp_dir("notemp-fail");
         let store = TokenStore::new(dir.to_path_buf());
         std::fs::create_dir(store.token_path()).expect("occupy the final path with a dir");
 
         let err = store
             .store(&token_set_expiring_at(1))
-            .expect_err("rename 이 실패해야 한다");
-        assert!(matches!(err, StoreError::Io(_)), "예상 밖 오류: {err:?}");
+            .expect_err("the rename should fail");
+        assert!(
+            matches!(err, StoreError::Io(_)),
+            "unexpected error: {err:?}"
+        );
         assert_eq!(
             unexpected_entries(&dir),
             Vec::<String>::new(),
-            "실패 경로에서 임시 파일이 남았다"
+            "a temporary file was left behind on the failure path"
         );
     }
 
@@ -767,9 +789,10 @@ mod tests {
     fn load_refuses_a_symlinked_token_file() {
         let dir = temp_dir("symlink");
         let real = dir.join("elsewhere.json");
-        // 미끼를 0600 으로 둔다. 0644 로 두면 링크를 **따라가는** 구현도
-        // 권한 검사에서 걸려 Err 가 되므로, 이 테스트가 symlink 검사가 아니라
-        // 권한 검사를 시험하게 된다(계획서 원문의 취약점).
+        // The bait is kept at 0600. At 0644 even an implementation that **follows** the link
+        // would be caught by the permission check and return Err, so this test would be
+        // testing the permission check rather than the symlink check (the weakness of the
+        // original plan text).
         write_file_with_mode(&real, VALID_JSON, 0o600);
         let link = dir.join(TOKEN_FILE);
         let _ = std::fs::remove_file(&link);
@@ -778,16 +801,17 @@ mod tests {
         let store = TokenStore::new(dir.to_path_buf());
         assert!(
             matches!(store.load(), Err(StoreError::Symlink)),
-            "symlink 을 통한 읽기를 거부해야 한다"
+            "reading through a symlink must be refused"
         );
     }
 
     #[test]
     fn load_reports_symlink_not_bad_permissions_when_the_path_is_both() {
-        // 우선순위 못박기: 경로가 symlink 이면서 대상 권한도 과대일 때 무엇을
-        // 보고하는가. **Symlink 가 이긴다** — 링크는 따라가지 않으므로 대상의
-        // 권한은 애초에 볼 자격이 없고, 링크 자신의 lstat mode 는 리눅스에서 늘
-        // 0777 이라 BadPermissions 로 보고하면 진짜 원인을 가린다.
+        // Pinning the precedence: what is reported when the path is a symlink and the target's
+        // permissions are also too permissive. **Symlink wins** — the link is not followed, so
+        // there is no standing to look at the target's permissions at all, and the link's own
+        // lstat mode is always 0777 on Linux, so reporting BadPermissions would hide the real
+        // cause.
         let dir = temp_dir("symlink-badperm");
         let real = dir.join("elsewhere.json");
         write_file_with_mode(&real, VALID_JSON, 0o644);
@@ -798,14 +822,14 @@ mod tests {
             .expect_err("must fail");
         assert!(
             matches!(err, StoreError::Symlink),
-            "symlink 이 권한보다 먼저 보고돼야 한다: {err:?}"
+            "the symlink must be reported before the permissions: {err:?}"
         );
     }
 
     #[test]
     fn load_rejects_group_or_world_readable_token_files() {
-        // 계획서 원문에는 BadPermissions 를 확인하는 테스트가 아예 없었다 —
-        // 권한 검사를 통째로 지운 구현이 전부 통과했다.
+        // The original plan text had no test at all that checked BadPermissions — an
+        // implementation with the permission check deleted wholesale passed everything.
         for mode in [0o644, 0o640, 0o604, 0o660] {
             let dir = temp_dir(&format!("badperm-{mode:o}"));
             write_file_with_mode(&dir.join(TOKEN_FILE), VALID_JSON, mode);
@@ -814,27 +838,30 @@ mod tests {
                 .expect_err("must fail");
             assert!(
                 matches!(err, StoreError::BadPermissions),
-                "mode {mode:o} 를 거부해야 한다: {err:?}"
+                "mode {mode:o} must be refused: {err:?}"
             );
         }
-        // 반대편: 0600 은 통과해야 한다(검사가 무조건 거부하는 구현 배제).
+        // The other side: 0600 must pass (this rules out an implementation whose check
+        // refuses unconditionally).
         let dir = temp_dir("badperm-ok");
         write_file_with_mode(&dir.join(TOKEN_FILE), VALID_JSON, 0o600);
         TokenStore::new(dir.to_path_buf())
             .load()
-            .expect("0600 은 허용돼야 한다");
+            .expect("0600 should be allowed");
     }
 
     #[test]
     fn load_reports_not_found_distinctly_from_io_error() {
-        // `TempDir` 은 가드다 — 바인딩을 살려 둬야 디렉터리가 단언 시점까지 존재한다.
-        //    `TokenStore::new(temp_dir(..))` 처럼 즉시 버리면 "디렉터리가 있는데 파일만
-        //    없다" 를 시험하려던 첫 단언이 몰래 "디렉터리도 없다" 로 바뀐다.
+        // `TempDir` is a guard — the binding has to be kept alive for the directory to exist
+        // until the assertion. If it is discarded immediately, as in
+        // `TokenStore::new(temp_dir(..))`, the first assertion, which meant to test "the
+        // directory exists and only the file is missing", silently turns into "the directory
+        // is missing too".
         let dir = temp_dir("missing");
         let store = TokenStore::new(dir.to_path_buf());
         assert!(matches!(store.load(), Err(StoreError::NotFound)));
 
-        // 디렉터리 자체가 없을 때도 Io 가 아니라 NotFound 다(아직 로그인 안 함).
+        // When the directory itself is missing it is also NotFound, not Io (not logged in yet).
         let base = temp_dir("missing-dir");
         let nested = TokenStore::new(base.join("not").join("created"));
         assert!(matches!(nested.load(), Err(StoreError::NotFound)));
@@ -842,8 +869,8 @@ mod tests {
 
     #[test]
     fn load_rejects_a_directory_at_the_token_path() {
-        // `is_file()` 검사를 지우면 리눅스에서 디렉터리 열기는 성공하고
-        // read_to_string 이 EISDIR 로 실패해 Io 가 된다 — 그 차이를 못박는다.
+        // If the `is_file()` check is deleted, opening a directory succeeds on Linux and
+        // read_to_string fails with EISDIR, giving Io — this pins that difference.
         let dir = temp_dir("token-is-dir");
         std::fs::create_dir(dir.join(TOKEN_FILE)).expect("mkdir");
         let err = TokenStore::new(dir.to_path_buf())
@@ -855,30 +882,32 @@ mod tests {
     #[test]
     fn load_reports_malformed_without_echoing_file_contents() {
         let dir = temp_dir("malformed");
-        // 0600 이어야 파싱 단계까지 도달한다 — write 만 하면 umask 때문에 0644 다.
+        // It has to be 0600 to reach the parsing stage — a plain write gives 0644 because of
+        // the umask.
         write_file_with_mode(&dir.join(TOKEN_FILE), "SECRET_NOT_JSON", 0o600);
         let err = TokenStore::new(dir.to_path_buf())
             .load()
             .expect_err("must fail");
         assert!(matches!(err, StoreError::Malformed), "{err:?}");
-        // Display 와 Debug 를 **둘 다** 본다: Display 만 가리고 Debug 로 serde
-        // 메시지를 실어 나르는 구현이 Display-only 단언을 통과한다.
+        // **Both** Display and Debug are checked: an implementation that hides only Display
+        // and carries the serde message out through Debug passes a Display-only assertion.
         let display = format!("{err}");
         let debug = format!("{err:?}");
         assert!(
             !display.contains("SECRET_NOT_JSON"),
-            "파일 내용이 오류에 새어나왔다: {display}"
+            "the file contents leaked into the error: {display}"
         );
         assert!(
             !debug.contains("SECRET_NOT_JSON"),
-            "파일 내용이 Debug 로 새어나왔다: {debug}"
+            "the file contents leaked through Debug: {debug}"
         );
     }
 
     #[test]
     fn load_reports_malformed_without_echoing_token_material() {
-        // 위 테스트의 픽스처는 토큰처럼 생기지 않았다. JSON 으로는 유효하지만
-        // 스키마에 안 맞는 파일 — serde 메시지가 값을 실어 나르기 가장 쉬운 형태다.
+        // The fixture of the test above does not look like a token. This is a file that is
+        // valid as JSON but does not fit the schema — the shape in which a serde message most
+        // easily carries a value out.
         let dir = temp_dir("malformed-tokenish");
         write_file_with_mode(
             &dir.join(TOKEN_FILE),
@@ -892,16 +921,17 @@ mod tests {
         for rendered in [format!("{err}"), format!("{err:?}")] {
             assert!(
                 !rendered.contains("SECRET_ACCESS_VALUE"),
-                "토큰 값이 오류에 새어나왔다: {rendered}"
+                "the token value leaked into the error: {rendered}"
             );
         }
     }
 
     #[test]
     fn load_checks_permissions_before_parsing() {
-        // 우선순위 못박기 #2: 손상 + 과대권한이 겹치면 BadPermissions 다.
-        // 파일을 읽어 파싱한 **뒤에** 권한을 보는 구현은 이미 내용을 메모리에
-        // 올린 셈이므로, 검사 순서 자체가 요구사항이다.
+        // Pinning the precedence #2: when corruption and overly permissive permissions overlap,
+        // it is BadPermissions. An implementation that looks at the permissions **after**
+        // reading and parsing the file has already loaded the contents into memory, so the
+        // order of the checks is itself the requirement.
         let dir = temp_dir("perm-before-parse");
         write_file_with_mode(&dir.join(TOKEN_FILE), "SECRET_NOT_JSON", 0o644);
         let err = TokenStore::new(dir.to_path_buf())
@@ -909,7 +939,7 @@ mod tests {
             .expect_err("must fail");
         assert!(
             matches!(err, StoreError::BadPermissions),
-            "권한 검사가 파싱보다 먼저여야 한다: {err:?}"
+            "the permission check must come before parsing: {err:?}"
         );
     }
 
@@ -927,10 +957,11 @@ mod tests {
 
     #[test]
     fn store_replaces_the_directory_entry_instead_of_writing_in_place() {
-        // 위 테스트("나중 쓴 값이 보인다")는 최종 파일을 truncate 하고 제자리에
-        // 덮어쓰는 **비원자적** 구현도 통과시킨다. 원자성의 관측 가능한 흔적은
-        // "이전 inode 를 건드리지 않는다" 는 것이다 — rename 은 디렉터리 엔트리만
-        // 바꾸므로, 옛 inode 를 가리키는 hard link 는 옛 내용을 그대로 본다.
+        // The test above ("the later-written value is visible") also lets through a
+        // **non-atomic** implementation that truncates the final file and overwrites it in
+        // place. The observable trace of atomicity is that "the previous inode is not touched"
+        // — rename changes only the directory entry, so a hard link pointing at the old inode
+        // still sees the old contents.
         let dir = temp_dir("atomic-inode");
         let store = TokenStore::new(dir.to_path_buf());
         store.store(&token_set_expiring_at(111)).expect("first");
@@ -950,15 +981,15 @@ mod tests {
         assert_eq!(
             old["expires_at"],
             serde_json::json!(111),
-            "옛 inode 가 덮어써졌다 — rename 이 아니라 제자리 쓰기다"
+            "the old inode was overwritten — this is an in-place write, not a rename"
         );
     }
 
     #[test]
     fn store_refuses_a_symlinked_token_path_and_leaves_the_victim_untouched() {
-        // rename 은 대상 symlink 를 따라가지 않으므로 피해자 파일이 망가지진
-        // 않지만, 호출자는 "링크를 만났다" 는 사실을 알아야 한다. 두 가지를
-        // 동시에 못박는다: 오류 종류 + 피해자 내용 불변.
+        // rename does not follow a target symlink, so the victim file is not damaged, but the
+        // caller has to know that "a link was encountered". Two things are pinned at once: the
+        // error kind + the victim's contents being unchanged.
         let dir = temp_dir("store-symlink");
         let victim = dir.join("victim.json");
         write_file_with_mode(&victim, "VICTIM_CONTENT", 0o600);
@@ -967,20 +998,20 @@ mod tests {
         let store = TokenStore::new(dir.to_path_buf());
         let err = store
             .store(&token_set_expiring_at(1))
-            .expect_err("symlink 대상 저장을 거부해야 한다");
+            .expect_err("saving to a symlink target should be refused");
         assert!(matches!(err, StoreError::Symlink), "{err:?}");
         assert_eq!(
             std::fs::read_to_string(&victim).expect("read victim"),
             "VICTIM_CONTENT",
-            "심볼릭 링크를 통해 피해자 파일에 토큰을 썼다"
+            "the token was written to the victim file through the symbolic link"
         );
     }
 
     #[test]
     fn store_refuses_a_symlink_planted_at_the_temp_path() {
-        // 임시 경로도 공격 표면이다. 잔여물 정리를 `remove_file` 로 무조건
-        // 하면 공격자가 심은 링크를 조용히 치우고 진행하게 된다 — 여기서는
-        // 거부한다. 피해자 파일이 그대로인지도 함께 본다.
+        // The temporary path is an attack surface too. Clearing leftovers unconditionally with
+        // `remove_file` would silently remove a link planted by an attacker and carry on —
+        // here it is refused. That the victim file is unchanged is checked as well.
         let dir = temp_dir("store-tmp-symlink");
         let victim = dir.join("victim.json");
         write_file_with_mode(&victim, "VICTIM_CONTENT", 0o600);
@@ -989,19 +1020,20 @@ mod tests {
 
         let err = store
             .store(&token_set_expiring_at(1))
-            .expect_err("임시 경로의 symlink 를 거부해야 한다");
+            .expect_err("a symlink at the temporary path should be refused");
         assert!(matches!(err, StoreError::Symlink), "{err:?}");
         assert_eq!(
             std::fs::read_to_string(&victim).expect("read victim"),
             "VICTIM_CONTENT",
-            "임시 경로의 심볼릭 링크를 따라 피해자 파일에 토큰을 썼다"
+            "the token was written to the victim file by following the symbolic link at the \
+             temporary path"
         );
     }
 
     #[test]
     fn store_clears_a_stale_regular_temp_file() {
-        // 링크가 아닌 평범한 잔여물(이전 실행의 크래시)은 저장을 영구히
-        // 막으면 안 된다 — O_EXCL 이 EEXIST 로 실패하기 때문이다.
+        // A plain leftover that is not a link (a crash of a previous run) must not block saving
+        // permanently — it would otherwise, because O_EXCL fails with EEXIST.
         let dir = temp_dir("store-stale-tmp");
         let store = TokenStore::new(dir.to_path_buf());
         write_file_with_mode(&store.temp_path(), "STALE", 0o600);
@@ -1012,8 +1044,9 @@ mod tests {
 
     #[test]
     fn store_creates_a_missing_token_directory() {
-        // 가드 바인딩을 살려 둔다 — 즉시 버리면 조상 디렉터리째 사라져서
-        //    `store` 가 만드는 것이 `nested/deep` 이 아니라 트리 전체가 된다.
+        // The guard binding is kept alive — if it is discarded immediately the ancestor
+        // directory disappears with it, and what `store` creates is then the whole tree rather
+        // than `nested/deep`.
         let root = temp_dir("mkdir");
         let store = TokenStore::new(root.join("nested").join("deep"));
         store.store(&token_set_expiring_at(1)).expect("store");
@@ -1022,12 +1055,13 @@ mod tests {
 
     #[test]
     fn store_creates_the_token_directory_owner_only() {
-        // 설계 §4 는 `~/.fleetwire/ 0700` 을 명시한다. `create_dir_all` 은 mode 에
-        // umask 를 적용하므로 umask 022 에서 0755, umask 002 + 공유 primary group
-        // 이면 0775(그룹 쓰기 가능)가 된다 — 이 파일의 symlink·TOCTOU 방어가 전부
-        // "남이 이 디렉터리를 못 건드린다" 를 전제하므로 그 자체로 구멍이다.
+        // Design §4 specifies `~/.fleetwire/ 0700`. `create_dir_all` applies the umask to the
+        // mode, so the result is 0755 under umask 022 and 0775 (group-writable) with umask 002
+        // + a shared primary group — every symlink and TOCTOU defence in this file presumes
+        // "nobody else can touch this directory", so that is a hole in itself.
         let root = temp_dir("mkdir-mode");
-        // 조상까지 함께 만들어, recursive 가 **모든** 새 디렉터리에 mode 를 거는지 본다.
+        // The ancestors are created along with it, to check that recursive applies the mode to
+        // **every** new directory.
         let deep = root.join("nested").join("deep");
         let store = TokenStore::new(deep.clone());
         store.store(&token_set_expiring_at(1)).expect("store");
@@ -1044,15 +1078,16 @@ mod tests {
 
     #[test]
     fn store_refuses_a_group_or_world_accessible_token_directory() {
-        // `DirBuilder::mode` 는 **새로 만드는** 디렉터리에만 걸린다. 이미 0775 로
-        // 존재하던 `~/.fleetwire` 는 그대로이므로 절반밖에 못 막는다 — 나머지
-        // 절반이 이 거부다. `set_permissions` 로 만들었으므로 umask 와 무관하다.
+        // `DirBuilder::mode` applies only to **newly created** directories. A `~/.fleetwire`
+        // that already existed as 0775 stays as it is, so that covers only half — the other
+        // half is this refusal. The mode is set with `set_permissions`, so it does not depend
+        // on the umask.
         for mode in [0o755, 0o775, 0o770, 0o707] {
             let dir = temp_dir(&format!("baddir-store-{mode:o}"));
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).expect("chmod");
             let err = TokenStore::new(dir.to_path_buf())
                 .store(&token_set_expiring_at(1))
-                .expect_err("열린 디렉터리에 토큰을 쓰면 안 된다");
+                .expect_err("tokens should not be written into an open directory");
             assert!(
                 matches!(err, StoreError::BadDirPermissions),
                 "mode {mode:o}: {err:?}"
@@ -1062,16 +1097,17 @@ mod tests {
 
     #[test]
     fn load_refuses_a_group_or_world_writable_token_directory() {
-        // 이것이 실제 공격이다: 디렉터리에 쓸 수 있는 사람은 tokens.json 을 지우고
-        // **자기 소유의 평범한 0600 파일**을 놓을 수 있다. 그러면 symlink 검사도,
-        // 권한 검사도, ino/dev 재검사도 전부 통과한다(uid 검사가 없다) — 조용한
-        // 토큰 바꿔치기다. 파일 단위 검사로는 원리적으로 못 막으므로 전제를 본다.
+        // This is the real attack: anyone who can write to the directory can delete tokens.json
+        // and put **a plain 0600 file of their own** in its place. The symlink check, the
+        // permission check and the ino/dev re-check then all pass (there is no uid check) — a
+        // silent token swap. File-level checks cannot prevent this in principle, so the
+        // premise is checked.
         let dir = temp_dir("baddir-load");
         write_file_with_mode(&dir.join(TOKEN_FILE), VALID_JSON, 0o600);
-        // 파일 자체는 흠잡을 데가 없다 — 이 상태로는 읽힌다.
+        // The file itself is flawless — in this state it is read.
         TokenStore::new(dir.to_path_buf())
             .load()
-            .expect("0700 디렉터리 + 0600 파일은 읽혀야 한다");
+            .expect("a 0700 directory + a 0600 file should be readable");
 
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).expect("chmod");
         let err = TokenStore::new(dir.to_path_buf())
@@ -1079,17 +1115,17 @@ mod tests {
             .expect_err("must fail");
         assert!(
             matches!(err, StoreError::BadDirPermissions),
-            "완벽한 0600 파일이어도 디렉터리가 열려 있으면 거부해야 한다: {err:?}"
+            "even a perfect 0600 file must be refused when the directory is open: {err:?}"
         );
     }
 
     #[test]
     fn a_symlinked_token_directory_is_refused_rather_than_followed() {
-        // final fix wave / triage 7. `metadata` 는 링크를 따라가므로, 링크가 가리키는
-        // 곳이 0700 이기만 하면 통과한다 — 즉 남이 `~/.fleetwire` 를 자기 디렉터리로
-        // 향하는 symlink 로 바꿔 두면, 파일 쪽의 촘촘한 symlink 방어를 전부
-        // 우회해서 토큰을 자기 디렉터리에 쓰게 만들 수 있다. 디렉터리 쪽도
-        // `symlink_metadata` 로 링크 자체를 본다.
+        // final fix wave / triage 7. `metadata` follows links, so it passes as long as the
+        // place the link points to is 0700 — that is, if someone else replaces `~/.fleetwire`
+        // with a symlink to a directory of their own, they can bypass all of the tight symlink
+        // defences on the file side and make the tokens be written into their directory. The
+        // directory side also looks at the link itself with `symlink_metadata`.
         let base = temp_dir("symlinkdir");
         let real = base.join("real");
         std::fs::DirBuilder::new()
@@ -1097,30 +1133,31 @@ mod tests {
             .create(&real)
             .expect("real dir");
         write_file_with_mode(&real.join(TOKEN_FILE), VALID_JSON, 0o600);
-        // 대조군: 링크를 거치지 않으면 정상적으로 읽힌다.
+        // Control: without going through the link it is read normally.
         TokenStore::new(real.clone())
             .load()
-            .expect("실제 0700 디렉터리는 읽혀야 한다");
+            .expect("the real 0700 directory should be readable");
 
         let link = base.join("link");
         std::os::unix::fs::symlink(&real, &link).expect("symlink");
 
         let err = TokenStore::new(link.clone())
             .load()
-            .expect_err("symlink 디렉터리를 따라갔다");
+            .expect_err("the symlinked directory was followed");
         assert!(matches!(err, StoreError::Symlink), "{err:?}");
 
-        // 쓰기 쪽도 같은 가드를 지난다(`prepare_dir` → `ensure_private_dir`).
+        // The write side passes through the same guard (`prepare_dir` → `ensure_private_dir`).
         let err = TokenStore::new(link)
             .store(&token_set_expiring_at(1))
-            .expect_err("symlink 디렉터리에 토큰을 썼다");
+            .expect_err("the token was written into the symlinked directory");
         assert!(matches!(err, StoreError::Symlink), "{err:?}");
     }
 
     #[test]
     fn load_reports_bad_dir_permissions_before_not_found() {
-        // 우선순위 못박기: 디렉터리가 열려 있으면 토큰 파일 유무보다 먼저 보고한다.
-        // 파일이 없다는 사실 자체가 "방금 누가 지웠다" 일 수 있다.
+        // Pinning the precedence: if the directory is open, that is reported before whether the
+        // token file exists. The very fact that the file is missing may mean "someone just
+        // deleted it".
         let dir = temp_dir("baddir-precedence");
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).expect("chmod");
         let err = TokenStore::new(dir.to_path_buf())
@@ -1131,10 +1168,11 @@ mod tests {
 
     #[test]
     fn store_writes_the_token_verbatim_without_recomputing_expiry() {
-        // A2 Task 3 리뷰에서 넘어온 위험: epoch 이전 시계에서 `now + expires_in`
-        // 은 u64::MAX 로 포화해 "영원히 만료되지 않는" 토큰을 남긴다. Task 4 의
-        // `store` 는 시각 계산을 **하지 않는다** — 받은 것을 그대로 쓴다.
-        // 미지 필드 보존도 같은 단언으로 못박는다(파일을 왕복해도 잃지 않는다).
+        // A hazard carried over from the A2 Task 3 review: under a pre-epoch clock
+        // `now + expires_in` saturates to u64::MAX and leaves a token that "never expires".
+        // The `store` of Task 4 **does no** time arithmetic — it writes what it received as is.
+        // The preservation of unknown fields is pinned by the same assertions (they are not
+        // lost on a round trip through the file).
         let dir = temp_dir("verbatim");
         let store = TokenStore::new(dir.to_path_buf());
         let ts: TokenSet = serde_json::from_str(
@@ -1148,24 +1186,26 @@ mod tests {
         assert_eq!(
             parsed["expires_at"],
             serde_json::json!(1_234_567_890_u64),
-            "store 가 만료 시각을 다시 계산했다"
+            "store recomputed the expiry time"
         );
         assert_eq!(
             parsed["id_token"],
             serde_json::json!("KEEP_ME"),
-            "미지 필드가 파일 왕복에서 사라졌다"
+            "the unknown field was lost on the round trip through the file"
         );
     }
 
     #[test]
     fn load_rejects_a_fifo_at_the_token_path_without_blocking_on_it() {
-        // `load_rejects_a_directory_at_the_token_path` 는 `is_file()` 검사를 지운
-        // 구현을 "오류 종류가 다르다"(Io) 로만 잡는다 — 디렉터리는 열리기라도 하기
-        // 때문이다. FIFO 는 그보다 나쁘다: 쓰는 쪽이 없는 FIFO 를 O_RDONLY 로 열면
-        // `open(2)` 이 **영원히 블록한다**. 검사가 열기보다 먼저여야 하는 진짜 이유가
-        // 그것이고, 오류 종류가 아니라 "끝나기는 하는가" 로 못박는다.
+        // `load_rejects_a_directory_at_the_token_path` catches an implementation with the
+        // `is_file()` check deleted only as "the error kind differs" (Io) — because a directory
+        // can at least be opened. A FIFO is worse than that: opening a FIFO with no writer as
+        // O_RDONLY makes `open(2)` **block forever**. That is the real reason the check has to
+        // come before the open, and it is pinned not by the error kind but by "does it finish
+        // at all".
         //
-        // mkfifo(1) 이 없으면 조용히 건너뛴다(프로세스 전역 상태 미사용).
+        // If mkfifo(1) is not available the test is silently skipped (no process-global state
+        // is used).
         let dir = temp_dir("fifo");
         let path = dir.join(TOKEN_FILE);
         let made = std::process::Command::new("mkfifo")
@@ -1174,65 +1214,73 @@ mod tests {
             .map(|s| s.success())
             .unwrap_or(false);
         if !made {
-            eprintln!("skipped: mkfifo(1) unavailable — FIFO 경로를 만들 수 없다");
+            eprintln!("skipped: mkfifo(1) unavailable — cannot create the FIFO path");
             return;
         }
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("chmod");
 
-        // 별도 스레드에서 돌려 hang 을 무한 대기가 아니라 실패로 만든다.
+        // It runs on a separate thread so that a hang becomes a failure rather than an endless
+        // wait.
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let outcome = TokenStore::new(dir.to_path_buf()).load();
             let _ = tx.send(matches!(outcome, Err(StoreError::Malformed)));
         });
         match rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(is_malformed) => assert!(is_malformed, "FIFO 를 Malformed 로 거부해야 한다"),
-            Err(_) => panic!("load 가 FIFO 를 열려다 블록했다 — 열기 전에 파일 종류를 봐야 한다"),
+            Ok(is_malformed) => assert!(is_malformed, "a FIFO must be refused as Malformed"),
+            Err(_) => panic!("load blocked opening the FIFO — check the file type before opening"),
         }
     }
 
     #[test]
     fn a_failed_store_leaves_the_previous_token_file_intact() {
-        // 저장이 실패했을 때 잃으면 안 되는 것은 새 토큰이 아니라 **옛 토큰**이다.
-        // 최종 경로를 먼저 비우고 쓰는 구현(truncate 후 쓰기)은 실패할 때마다 멀쩡히
-        // 쓰던 토큰까지 날려 재-OAuth 를 강제한다. 디렉터리를 읽기 전용으로 만들어
-        // 임시 파일 생성 단계에서 실패시킨다.
+        // What must not be lost when a save fails is not the new token but the **old token**.
+        // An implementation that empties the final path first and then writes (truncate, then
+        // write) wipes out even the perfectly good token in use on every failure and forces a
+        // re-OAuth. The directory is made read-only so that the save fails at the stage of
+        // creating the temporary file.
         let dir = temp_dir("failed-store-keeps-old");
         let store = TokenStore::new(dir.to_path_buf());
         store.store(&token_set_expiring_at(111)).expect("seed");
 
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).expect("chmod");
-        // root 로 돌리면 0500 에도 쓸 수 있어 실패를 연출할 수 없다 — 그 사실을
-        // 조용히 넘기지 않고 명시적으로 건너뛴다.
+        // When run as root, even 0500 is writable and the failure cannot be staged — rather
+        // than passing over that fact silently, the test is skipped explicitly.
         let denied = std::fs::File::create(dir.join(".write-probe")).is_err();
         if !denied {
             drop(std::fs::remove_file(dir.join(".write-probe")));
             std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
                 .expect("restore");
-            eprintln!("skipped: root 권한 — 읽기 전용 디렉터리에서도 쓰기가 성공한다");
+            eprintln!("skipped: running as root — writes succeed even in a read-only directory");
             return;
         }
 
         let err = store
             .store(&token_set_expiring_at(222))
-            .expect_err("읽기 전용 디렉터리에 저장이 성공하면 안 된다");
-        assert!(matches!(err, StoreError::Io(_)), "예상 밖 오류: {err:?}");
+            .expect_err("saving into a read-only directory should not succeed");
+        assert!(
+            matches!(err, StoreError::Io(_)),
+            "unexpected error: {err:?}"
+        );
 
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).expect("restore");
-        let back = store.load().expect("옛 토큰이 그대로 읽혀야 한다");
+        let back = store
+            .load()
+            .expect("the old token should still be readable as it was");
         assert_eq!(back.access_token(), "AT");
         assert_eq!(
             serde_json::to_value(&back).expect("json")["expires_at"],
             serde_json::json!(111),
-            "저장에 실패했는데 옛 토큰 파일이 손상됐다"
+            "the save failed, yet the old token file was damaged"
         );
         assert_eq!(unexpected_entries(&dir), Vec::<String>::new());
     }
 
     #[test]
     fn lock_path_sits_beside_the_token_file_in_the_same_directory() {
-        // Task 5 의 락은 **경로가 아니라 inode** 기준이라, 락 파일이 토큰과 다른
-        // 디렉터리로 새면 프로세스 간 상호배제가 조용히 무력화된다.
+        // The lock of Task 5 is keyed on **the inode, not the path**, so if the lock file
+        // strays into a different directory from the tokens, cross-process mutual exclusion is
+        // silently defeated.
         let dir = temp_dir("paths");
         let store = TokenStore::new(dir.to_path_buf());
         assert_eq!(store.token_path(), dir.join(TOKEN_FILE));

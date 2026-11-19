@@ -48,7 +48,8 @@ const MSG_MAX: usize = 512;
 /// is set. Callers with different needs should set an explicit value.
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-// 연결 마감(10초)과 유휴 연결 수(호스트당 2)는 `net::agent` 한 곳에서 정합니다(design §9).
+// The connect deadline (10 seconds) and the idle connection count (2 per host) are set in one
+// place, `net::agent` (design §9).
 
 /// Retry is **opt-in** (design §9.0/§11 non-goal) — the default is exactly
 /// one attempt, i.e. no retry. See [`Client::send`] and
@@ -887,8 +888,10 @@ impl Client {
         // grew a second blocking arm would be a visible diff in review, not
         // a silent divergence a refactor could introduce unnoticed.
         let (_scope_check_gen, scope_check_token) = self.tokens.access_token_with_generation()?;
-        // 읽기 토큰이 명령 권한을 가지면 아무것도 보내지 않습니다(코스 내비 §3 위험 B, 10-09 refresh 확장 관찰).
-        // 판단 불가(`Indeterminate`)는 막지 않습니다. 이 선검사의 fail-open 입장과 같습니다.
+        // When the read token carries command permissions, nothing is sent (course navigation
+        // §3 risk B; the scope widening on refresh observed on 10-09). An undecidable result
+        // (`Indeterminate`) does not block, which is the same fail-open stance as this
+        // pre-check.
         if let crate::auth::UnverifiedScopeObservation::ContainsRequiredScope =
             crate::auth::observe_forbidden(&scope_check_token)
         {
@@ -935,8 +938,10 @@ impl Client {
                 // `billing()`.
                 Err(e) => return Err(prior_response_error.unwrap_or(e)),
             };
-            // 요청에 실을 토큰은 반복마다 다시 가져옵니다. 401/412 복구 뒤의 토큰은 방금 갱신된 것이고,
-            // 스코프가 넓어지는 때가 바로 그때이므로 매번 이 토큰으로 다시 확인한 뒤에만 보냅니다.
+            // The token to put on the request is fetched again on every iteration. The token
+            // after a 401/412 recovery has just been refreshed, and that is exactly when the
+            // scopes can widen, so the request is sent only after re-checking this token each
+            // time.
             if let crate::auth::UnverifiedScopeObservation::ContainsRequiredScope =
                 crate::auth::observe_forbidden(&token)
             {
@@ -1264,7 +1269,8 @@ impl Client {
         if elapsed >= self.retry_deadline {
             return None;
         }
-        // 위 검사가 막지만 뺄셈 자체도 넘치지 않게 합니다(clippy `unchecked_time_subtraction`, 10-14).
+        // The check above already prevents it, but the subtraction itself is also kept from
+        // overflowing (clippy `unchecked_time_subtraction`, 10-14).
         let remaining = self.retry_deadline.saturating_sub(elapsed);
         std::thread::sleep(backoff_delay(retries_used).min(remaining));
         Some(retries_used + 1)
@@ -1528,7 +1534,8 @@ impl ClientBuilder {
     /// Currently never fails: the ureq agent builds infallibly. The `Result`
     /// is kept so a future fallible setting does not change the public API.
     pub fn build(self) -> Result<Client, Error> {
-        // 리다이렉트를 따라가지 않는 Agent 하나를 씁니다(design §4.6, 게이트 G2 가 `net::agent` 를 봅니다).
+        // Uses a single Agent that does not follow redirects (design §4.6; gate G2 watches
+        // `net::agent`).
         let agent = crate::net::agent(self.request_timeout);
         let bootstrap = self
             .bootstrap

@@ -114,7 +114,7 @@ mod tests {
     /// (design §2.2).
     #[test]
     fn assemble_needs_no_request_instance() {
-        // 인스턴스 없이 호출된다는 사실 자체가 계약이다.
+        // The very fact that it is called without an instance is the contract.
         let out = <DummyVehicles as FleetGet>::assemble(serde_json::Value::Null, None);
         assert!(out.is_null());
     }

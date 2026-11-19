@@ -205,9 +205,10 @@ pub struct Refreshed {
 
 impl core::fmt::Debug for Refreshed {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // 구조분해가 이 impl 의 안전장치다 — `TokenSet` 과 같은 이유·같은 모양.
-        // 필드를 추가하면 여기서 `E0027` 로 컴파일이 깨진다. `self.field` 로
-        // 접근했다면 새 필드가 조용히 출력에서 빠지고 어떤 테스트도 실패하지 않는다.
+        // The destructuring is the safety device of this impl — the same reason and the same
+        // shape as `TokenSet`. Adding a field breaks compilation here with `E0027`. Had the
+        // fields been accessed as `self.field`, a new field would silently drop out of the
+        // output and no test would fail.
         let Self {
             access_token: _,
             refresh_token: _,
@@ -216,7 +217,7 @@ impl core::fmt::Debug for Refreshed {
         f.debug_struct("Refreshed")
             .field("access_token", &crate::redaction::REDACTED)
             .field("refresh_token", &crate::redaction::REDACTED)
-            // 수명은 비밀이 아니고, 진단에 실제로 필요한 유일한 값이다.
+            // The lifetime is not a secret, and it is the only value diagnostics actually need.
             .field("expires_in_secs", expires_in_secs)
             .finish()
     }
@@ -372,7 +373,7 @@ impl cell::Recover for State {
     fn recover(&mut self) {
         self.cached = None;
         self.generation = self.generation.saturating_add(1);
-        // 저장 실패가 먼저 있었다면 그 사유를 남깁니다(더 구체적입니다).
+        // If a persist failure came first, that reason is kept (it is more specific).
         self.refresh_forbidden.get_or_insert(Forbid::Interrupted);
     }
 }
@@ -458,8 +459,8 @@ pub struct TokenManager {
 
 impl core::fmt::Debug for TokenManager {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // 캐시된 토큰을 찍지 않는다(REQ-18). `TokenSet` 의 Debug 가 이미 리댁션
-        // 하지만, 여기서 상태를 통째로 찍지 않는 편이 잠금 없이도 안전하다.
+        // The cached token is not printed (REQ-18). The Debug of `TokenSet` already redacts,
+        // but not printing the state at all here is safe even without taking the lock.
         f.debug_struct("TokenManager").finish_non_exhaustive()
     }
 }
@@ -700,8 +701,9 @@ impl TokenManager {
     /// produced by the refresh implementation is propagated as is.
     ///
     pub fn access_token(&self) -> Result<String, Error> {
-        // 얇은 래퍼다 — 본문은 하나뿐이어야 한다. 두 경로로 복제하면 한쪽만
-        // 고쳐지는 사고가 나고, 그 사고가 나는 곳이 하필 single-flight 다.
+        // A thin wrapper — there must be only one body. Duplicating it into two paths leads to
+        // the accident where only one side gets fixed, and the place where that accident would
+        // happen is, of all places, the single-flight.
         self.access_token_with_generation().map(|(_gen, t)| t)
     }
 
@@ -723,31 +725,35 @@ impl TokenManager {
     /// with [`Error::Auth`]`{ pricing: None }` (the cache is not returned — see the
     /// [`MIN_REFRESH_INTERVAL`] documentation for the reason).
     pub fn access_token_with_generation(&self) -> Result<(Generation, String), Error> {
-        // 1. in-process single-flight. REQ-15 AC3: 이 대기에도 유한 deadline 이 있어야 합니다.
-        //    다른 호출자가 갱신 중이면(`refreshing` 깃발) 끝나길 기다립니다. 여기는 아직 어떤 POST 도
-        //    보내기 전이라 포기해도 잃는 상태가 없습니다. 접두사는 파일 락(`token lock:`)과 **다르게**
-        //    둡니다 — 두 대기를 오류 문장만으로 가를 수 있어야 합니다.
+        // 1. in-process single-flight. REQ-15 AC3: this wait must have a finite deadline too.
+        //    If another caller is refreshing (the `refreshing` flag), wait for it to finish.
+        //    No POST has been sent yet at this point, so giving up loses no state. The prefix
+        //    is kept **different** from the file lock's (`token lock:`) — the two waits must
+        //    be distinguishable from the error sentence alone.
         let state = self
             .state
             .lock_within(self.state_deadline)
             .map_err(|_timeout| state_lock_timeout())?;
 
-        // 2. 캐시 확인 — 유효하면 파일 락을 건드리지 않습니다. 기다리는 동안 형제가 이미 갱신해
-        //    두었으면 여기서 걸립니다.
+        // 2. Check the cache — if it is valid, the file lock is not touched. If a sibling has
+        //    already refreshed while we were waiting, it is caught here.
         //
-        //    `is_rejected` 가 함께 걸린 이유(final fix wave / Important 1): `is_fresh` 만으로는
-        //    **서버가 이미 거절한** 토큰을 걸러낼 수 없습니다. 401 은 `expires_at` 을 움직이지 않습니다.
+        //    Why `is_rejected` is checked alongside (final fix wave / Important 1): `is_fresh`
+        //    alone cannot filter out a token **the server has already rejected**. A 401 does
+        //    not move `expires_at`.
         if let Some(set) = state.cached.as_ref()
             && set.is_fresh(self.clock.as_ref(), EXPIRY_SKEW)
             && !state.is_rejected(set.access_token())
         {
-            // 세대는 잠금을 쥔 채로 읽습니다 — 이 토큰과 짝이 맞는 값이어야 합니다.
+            // The generation is read while holding the lock — it must be the value that pairs
+            // with this token.
             return Ok((state.generation, set.access_token().to_owned()));
         }
 
-        // 3~9 는 잠금 밖에서 합니다. 깃발이 서 있는 동안 상태를 바꾸는 것은 이 호출뿐이므로
-        // 여기서 읽은 사본은 끝날 때까지 그대로입니다. 갱신 중 panic 이면 티켓의 Drop 이
-        // `State::recover` 로 상태를 안전 쪽에 두고 기다리는 쪽을 깨웁니다(스펙 §0 I1).
+        // Steps 3–9 are done outside the lock. While the flag is raised this call is the only
+        // one that changes the state, so the copy read here stays as it is until the end. On a
+        // panic during the refresh, the ticket's Drop puts the state on the safe side with
+        // `State::recover` and wakes the waiting side (spec §0 I1).
         let snap = Snapshot {
             refresh_forbidden: state.refresh_forbidden,
             last_refresh_at: state.last_refresh_at,
@@ -769,7 +775,7 @@ impl TokenManager {
                 (s.generation, token)
             })),
             Err(Failed::PersistFailed(e)) => {
-                // 7번이 지키는 상태입니다: 회전은 일어났는데 디스크 상태를 모릅니다.
+                // The state step 7 guards: a rotation happened, but the disk state is unknown.
                 ticket.finish(|s| s.refresh_forbidden = Some(Forbid::PersistFailed));
                 Err(e)
             }
@@ -783,7 +789,7 @@ impl TokenManager {
     /// Runs steps 3–9 (clock, directory, file lock, disk adoption, forbidden flag, minimum
     /// interval, rotation, persist). It runs outside the state cell lock.
     fn refresh_unlocked(&self, snap: &Snapshot) -> Result<Fetched, Failed> {
-        // 3. 시계 온전성 — 락보다도, POST 보다도 **먼저**입니다.
+        // 3. Clock sanity — **before** the lock and before the POST as well.
         let now = self.clock.now_unix();
         if now == u64::MAX {
             return Err(Failed::Other(Error::Auth {
@@ -795,7 +801,7 @@ impl TokenManager {
             }));
         }
 
-        // 4. 디렉터리 준비 — 파일 락보다 **먼저**입니다.
+        // 4. Directory preparation — **before** the file lock.
         self.store.prepare_dir().map_err(|e| {
             Failed::Other(Error::Auth {
                 message: format!("token directory: {e}"),
@@ -803,7 +809,7 @@ impl TokenManager {
             })
         })?;
 
-        // 5. 프로세스 간 파일 락(REQ-15 의 나머지 절반).
+        // 5. Cross-process file lock (the other half of REQ-15).
         #[cfg(test)]
         self.lock_attempts
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -814,7 +820,7 @@ impl TokenManager {
             })
         })?;
 
-        // 6. 디스크 채택 — 형제 프로세스가 이미 회전시켰으면 그 결과를 씁니다.
+        // 6. Disk adoption — if a sibling process has already rotated, its result is used.
         let on_disk = self.store.load().map_err(|e| {
             Failed::Other(Error::Auth {
                 message: format!("token store: {e}"),
@@ -827,7 +833,7 @@ impl TokenManager {
             return Ok(Fetched::Adopted(on_disk));
         }
 
-        // 7. 저장 실패 뒤의 회전 금지.
+        // 7. No rotation after a persist failure.
         if let Some(why) = snap.refresh_forbidden {
             let cause = match why {
                 Forbid::PersistFailed => "a rotated token could not be persisted earlier",
@@ -844,7 +850,7 @@ impl TokenManager {
             }));
         }
 
-        // 8. 회전 최소 간격.
+        // 8. Minimum rotation interval.
         if let Some(last) = snap.last_refresh_at {
             let elapsed_secs = now.checked_sub(last);
             if elapsed_secs.is_none_or(|e| e < MIN_REFRESH_INTERVAL.as_secs()) {
@@ -864,7 +870,7 @@ impl TokenManager {
             }
         }
 
-        // 9. 회전 — 재시도하지 않습니다. 회전된 refresh 토큰은 **반환 전에** 저장합니다.
+        // 9. Rotation — no retry. The rotated refresh token is persisted **before returning**.
         let refreshed = self
             .refresher
             .refresh(on_disk.refresh_token())

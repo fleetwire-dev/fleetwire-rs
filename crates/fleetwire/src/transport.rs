@@ -86,7 +86,8 @@ pub(crate) fn execute_get(
     pricing: Pricing,
     request_timeout: Duration,
 ) -> Result<RawResponse, Error> {
-    // 마감은 보내기 전에 잡습니다. ureq 의 전체 마감과 같은 시각이고, 본문 읽기는 이 시각을 직접 셉니다.
+    // The deadline is taken before sending. It is the same instant as ureq's global deadline,
+    // and the body read counts against this instant directly.
     let deadline = Instant::now()
         .checked_add(request_timeout)
         .unwrap_or_else(Instant::now);
@@ -133,9 +134,10 @@ pub(crate) fn execute_get(
         _ => None,
     };
 
-    // 3xx 는 decode 의 `>=400` 게이트에 안 걸려 content-type 검사로 내려가고
-    // Error::Decode 가 된다. redirect 를 따라가지 않기로 했으므로(design §4.6)
-    // 여기서 Error::Api 로 만들어 시끄럽게 실패시킨다. body 를 읽기 전에 막는다.
+    // A 3xx is not caught by decode's `>=400` gate, falls through to the content-type check
+    // and becomes Error::Decode. Since we decided not to follow redirects (design §4.6), it
+    // is made an Error::Api here so that it fails loudly. It is stopped before the body is
+    // read.
     if status.is_redirection() {
         return Err(Error::Api {
             status,
@@ -150,7 +152,8 @@ pub(crate) fn execute_get(
         });
     }
 
-    // buffer-then-check 금지 — `read_capped` 가 누적하며 상한과 마감을 검사합니다.
+    // Buffer-then-check is forbidden: `read_capped` checks the cap and the deadline while
+    // accumulating.
     let body = match read_capped(
         &mut resp.body_mut().as_reader(),
         MAX_RESPONSE_BYTES,
@@ -167,7 +170,8 @@ pub(crate) fn execute_get(
             });
         }
         Err(ReadError::Deadline) => {
-            // 서버가 이미 처리했을 수 있습니다 → Unknown(재시도 금지).
+            // The server may already have processed it, so this is Unknown (must not be
+            // retried).
             return Err(Error::TransportUnknown {
                 message: body_preview("request timed out", MSG_MAX),
                 pricing,
