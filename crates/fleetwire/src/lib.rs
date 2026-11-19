@@ -3,12 +3,15 @@
 //! **Unofficial, read-only** Rust client for the Tesla Fleet API.
 //! Not affiliated with, endorsed by, or sponsored by Tesla, Inc.
 //!
-//! GET operations only — no vehicle-command or signing code. Fleet API calls
+//! GET operations only against the Fleet API — no vehicle-command or signing code. (The one
+//! request this crate sends that is not a GET is the OAuth token refresh.) Fleet API calls
 //! may be metered (`vehicle_data`, `nearby_charging_sites` are billed Data;
 //! the other 14 supported endpoints are not charged).
 //!
-//! Scope: 16 live-verified GET endpoints (12 vehicle + 4 user). 12 unverified
-//! endpoints (charging/energy/partner) are intentionally excluded until verified.
+//! Scope: 16 GET endpoints (12 vehicle + 4 user), the ones exercised against the live API.
+//! That is not sixteen verified response shapes: see "Verification levels" below for what was
+//! observed. 12 further endpoints (charging/energy/partner) are intentionally excluded until
+//! a live response can verify them.
 //!
 //! Status: **work in progress** — core types, the token layer
 //! ([`TokenManager`]: owner-only on-disk storage, rotation persisted before
@@ -74,7 +77,7 @@
 //! and this crate ships none other than [`HttpRefresher`]. Any refresher
 //! implementation **must** set its own request timeout:
 //! [`TokenManager::access_token`] holds both its in-process lock and the
-//! cross-process file lock across the refresh await, so a refresher that
+//! cross-process file lock across the refresh call, so a refresher that
 //! hangs blocks every caller in this process indefinitely and every sibling
 //! process for the full lock deadline. Before dispatch, [`Client::send`]
 //! also runs an advisory scope pre-check (design §10) — see
@@ -276,7 +279,7 @@ mod sealed;
 mod test_support;
 mod transport;
 
-/// Entry points for the fuzz targets in the repository's `fuzz/` directory.
+/// Entry points for the fuzz targets in the `fuzz/` directory of the fleetwire-rs repository.
 ///
 /// Compiled only under `--cfg fuzzing`, which `cargo fuzz` sets. Nothing here exists in a
 /// normal build, and it is not part of the public API. Each function hands untrusted bytes to
