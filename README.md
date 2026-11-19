@@ -13,7 +13,7 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
 
 [한국어 요약](README.ko.md) · [Quick start](crates/fleetwire/README.md#quick-start) ·
 [Architecture](docs/architecture.md) · [Safety boundaries](docs/safety-boundaries.md) ·
-[How this is built](docs/how-this-is-built.md)
+[How this is built](docs/how-this-is-built.md) · [Design history](docs/design/README.md)
 
 ## Why this exists
 
@@ -118,7 +118,7 @@ instructions agents work under in this repository.
 |---|---|
 | `crates/fleetwire` | The client library, published to crates.io as [`fleetwire`](https://crates.io/crates/fleetwire). Start with its [README](crates/fleetwire/README.md). |
 | `crates/fleetwire-testkit` | A small mock HTTP server on std networking (no async runtime), used by the tests and by `offline_demo`. Not published. |
-| `docs/` | Architecture, safety boundaries and the development workflow. |
+| `docs/` | Architecture, safety boundaries and the development workflow. `docs/design/` holds the original specifications, plans and hand-over notes the crate was built from. |
 | `fuzz/` | Fuzz targets for the code that reads bytes the crate did not write: response bodies, tokens, the region URL. |
 | `scripts/check_invariants.py` | The invariant gates CI runs, each with a self-test. |
 

@@ -74,7 +74,7 @@ cargo run --example offline_demo    # 위 다섯 가지 중 넷을 가짜 서버
 친다」는 규칙이 그 구조입니다.
 
 방법과 수치, 이 크레이트에서 실제로 잡은 결함은 [docs/how-this-is-built.md](docs/how-this-is-built.md)에
-있습니다. 설계는 [docs/architecture.md](docs/architecture.md)를 보십시오.
+있습니다. 이 크레이트를 만든 원래 명세·계획·인계 문서는 [docs/design/](docs/design/README.md)에 쓴 그대로(한국어) 있습니다. 설계는 [docs/architecture.md](docs/architecture.md)를 보십시오.
 
 ## 라이선스
 

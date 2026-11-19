@@ -128,6 +128,11 @@ checked. These rules are aimed at that.
 
 ## Defects this caught in this crate
 
+The original specifications, plans and hand-over notes for this crate are in
+[docs/design/](design/README.md), in Korean as they were written. The double-charge fix and its
+test were made in a later sub-project (A5) whose documents are not published; the A3
+hand-over note already names the risk.
+
 Each of these is recorded in the source of this repository, next to the code or test that now
 prevents it.
 
