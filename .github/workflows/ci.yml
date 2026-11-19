@@ -44,6 +44,12 @@ jobs:
           components: rustfmt, clippy
       - run: cargo +stable fmt --all -- --check
       - run: cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings
+      # The fuzz entry points exist only under `--cfg fuzzing`, so no other step compiles them. Without this
+      # one, renaming something they call would go unnoticed until the weekly fuzz run.
+      - name: clippy with the fuzz entry points
+        env:
+          RUSTFLAGS: --cfg fuzzing
+        run: cargo +stable clippy -p fleetwire --lib --locked -- -D warnings
       - name: doc
         env:
           # Public docs deliberately link to a few private items, so only that lint is allowed.
@@ -75,3 +81,26 @@ jobs:
           tar -xzf gitleaks_8.30.1_linux_x64.tar.gz -C "$RUNNER_TEMP/gitleaks" gitleaks
           rm gitleaks_8.30.1_linux_x64.tar.gz
           "$RUNNER_TEMP/gitleaks/gitleaks" dir . --config .gitleaks.toml --no-banner --redact
+
+  # The invariant gates (scripts/check_invariants.py) and the controls that prove each gate can fail.
+  # The two examples that need no Tesla account run here as well, so the README cannot drift from them.
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - name: gate self-tests
+        run: |
+          python3 -I scripts/check_invariants.py --self-test
+          python3 -I scripts/risk_tier.py --self-test
+          python3 -I .claude/hooks/block_bulk_add.py --self-test
+      - name: gates
+        run: python3 -I scripts/check_invariants.py
+      - name: examples that need no account
+        run: |
+          cargo +stable run --locked --example pricing_table
+          cargo +stable run --locked --example offline_demo

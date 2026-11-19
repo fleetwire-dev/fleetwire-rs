@@ -6,3 +6,7 @@
 # Token files must never enter the repository.
 tokens.json
 *.token
+
+# Agent worktrees and personal settings stay local.
+.claude/worktrees/
+.claude/settings.local.json
