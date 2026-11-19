@@ -25,18 +25,23 @@ fn main() -> ExitCode {
         Err(e) => {
             // Print the error's message, not its `Debug` form, and point at the README.
             eprintln!("error: {e}");
-            eprintln!("See \"If it fails\" in the fleetwire README for the usual causes.");
+            eprintln!("See \"If it fails\" in crates/fleetwire/README.md for the usual causes.");
             ExitCode::FAILURE
         }
     }
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let client_id = std::env::var("TESLA_CLIENT_ID")
-        .map_err(|_| "set TESLA_CLIENT_ID to your Tesla developer app's client id")?;
-    let dir = std::env::var_os("FLEETWIRE_TOKEN_DIR")
-        .map(PathBuf::from)
-        .ok_or("set FLEETWIRE_TOKEN_DIR to the directory that holds tokens.json")?;
+    // Name both variables at once, so a first run does not fail twice.
+    let client_id = std::env::var("TESLA_CLIENT_ID").ok();
+    let dir = std::env::var_os("FLEETWIRE_TOKEN_DIR").map(PathBuf::from);
+    let (Some(client_id), Some(dir)) = (client_id, dir) else {
+        return Err(
+            "set TESLA_CLIENT_ID to your Tesla developer app's client id \
+                    and FLEETWIRE_TOKEN_DIR to the directory that holds tokens.json"
+                .into(),
+        );
+    };
     let show_vin = std::env::args().any(|a| a == "--show-vin");
 
     // The token manager refreshes the access token when it is stale and writes the rotated

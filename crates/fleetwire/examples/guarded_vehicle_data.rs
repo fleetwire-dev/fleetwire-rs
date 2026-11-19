@@ -21,7 +21,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use fleetwire::api::vehicles::{DataEndpoint, GetVehicleData};
-use fleetwire::{Client, Guarded, HttpRefresher, TokenManager};
+use fleetwire::{Billing, Client, FleetGet, Guarded, HttpRefresher, Pricing, TokenManager};
 
 fn main() -> ExitCode {
     match run() {
@@ -29,18 +29,37 @@ fn main() -> ExitCode {
         Err(e) => {
             // Print the error's message, not its `Debug` form, and point at the README.
             eprintln!("error: {e}");
-            eprintln!("See \"If it fails\" in the fleetwire README for the usual causes.");
+            // Every client error can say whether the failed call cost money.
+            if let Some(err) = e.downcast_ref::<fleetwire::Error>() {
+                eprintln!("{}", spend_after_failure(err.billing()));
+            }
+            eprintln!("See \"If it fails\" in crates/fleetwire/README.md for the usual causes.");
             ExitCode::FAILURE
         }
     }
 }
 
+/// What a failed call cost, in words.
+fn spend_after_failure(billing: Billing) -> &'static str {
+    match billing {
+        Billing::Billed => "spent: this failed call was billed",
+        Billing::NotBilled => "spent: nothing, this failed call was not billed",
+        // `Unknown`: the request may have reached Tesla. Do not send it again to find out.
+        _ => "spent: unknown, the request may have reached Tesla before it failed",
+    }
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let client_id = std::env::var("TESLA_CLIENT_ID")
-        .map_err(|_| "set TESLA_CLIENT_ID to your Tesla developer app's client id")?;
-    let dir = std::env::var_os("FLEETWIRE_TOKEN_DIR")
-        .map(PathBuf::from)
-        .ok_or("set FLEETWIRE_TOKEN_DIR to the directory that holds tokens.json")?;
+    // Name both variables at once, so a first run does not fail twice.
+    let client_id = std::env::var("TESLA_CLIENT_ID").ok();
+    let dir = std::env::var_os("FLEETWIRE_TOKEN_DIR").map(PathBuf::from);
+    let (Some(client_id), Some(dir)) = (client_id, dir) else {
+        return Err(
+            "set TESLA_CLIENT_ID to your Tesla developer app's client id \
+                    and FLEETWIRE_TOKEN_DIR to the directory that holds tokens.json"
+                .into(),
+        );
+    };
     let vin = std::env::args()
         .nth(1)
         .ok_or("pass the vehicle's VIN as the first argument")?;
@@ -50,12 +69,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ask only for charge_state: no location, so the `vehicle_location` scope is not needed.
     let req = GetVehicleData::new(vin, vec![DataEndpoint::ChargeState])?;
+    // The request type knows its own price before anything is sent.
+    let price = match req.pricing() {
+        Pricing::Data { usd_per_request } => format!("${usd_per_request}"),
+        _ => "nothing".to_owned(),
+    };
     let metered = client.send_guarded(&req)?;
 
     match metered.value {
         Guarded::Skipped { state, .. } => {
             let state = if state.is_empty() { "unknown" } else { &state };
-            println!("car is {state}; skipped the billed call, nothing spent");
+            println!("car is {state}; skipped the billed call");
+            println!("spent: nothing (the state check is a free call)");
         }
         Guarded::Executed(data) => {
             let battery = data
@@ -67,6 +92,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 Some(level) => println!("battery {level}%"),
                 None => println!("the response carried no charge_state.battery_level"),
             }
+            println!("spent: one billed request ({price})");
         }
         _ => println!("unrecognised gate outcome"),
     }

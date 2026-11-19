@@ -83,6 +83,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "Use Client::send_guarded for the billed ones: it checks for free that the car is online first."
     );
+    println!(
+        "These are the prices the request types carry, read without any network call; they are not a live tariff."
+    );
     Ok(())
 }
 

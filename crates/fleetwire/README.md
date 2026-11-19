@@ -5,8 +5,8 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
 > **Not affiliated with, endorsed by, or sponsored by Tesla, Inc.**
 > Tesla names and trademarks belong to their respective owners.
 
-- **Read-only.** GET requests only. There is no vehicle-command or signing code, and the endpoint trait is
-  sealed, so a caller cannot add a write.
+- **Read-only.** GET requests only to the Fleet API (the one POST is the OAuth token refresh). There is
+  no vehicle-command or signing code, and the endpoint trait is sealed, so a caller cannot add a write.
 - **Cost-aware.** Every request type says whether Tesla bills it (`Pricing`). Billed calls are never
   retried or re-sent by the recovery paths, and `Client::send_guarded` checks for free whether the car is
   online before spending anything.
@@ -35,9 +35,57 @@ GET                                           cost          scopes
 /api/1/vehicles/{vin}/nearby_charging_sites   $0.002/call   vehicle_device_data
 /api/1/vehicles                               free          vehicle_device_data
 /api/1/vehicles/{vin}                         free          vehicle_device_data
-...
+/api/1/vehicles/{vin}/invitations             free          vehicle_device_data
+/api/1/vehicles/{vin}/mobile_enabled          free          vehicle_device_data
+/api/1/vehicles/{vin}/recent_alerts           free          vehicle_device_data
+/api/1/vehicles/{vin}/release_notes           free          vehicle_device_data
+/api/1/vehicles/{vin}/service_data            free          vehicle_device_data
+/api/1/vehicles/{vin}/drivers                 free          vehicle_device_data
+/api/1/vehicles/{vin}/fleet_telemetry_config  free          vehicle_device_data
+/api/1/vehicles/{vin}/fleet_telemetry_errors  free          vehicle_device_data
+/api/1/users/region                           free          any of (openid, user_data, vehicle_device_data)
+/api/1/users/me                               free          user_data
+/api/1/users/orders                           free          vehicle_device_data
+/api/1/users/feature_config                   free          user_data
+
 2 of 16 endpoints are billed; 14 are free.
+Use Client::send_guarded for the billed ones: it checks for free that the car is online first.
+These are the prices the request types carry, read without any network call; they are not a live tariff.
 ```
+
+To watch the guarantees above hold, also without a token or an outside connection:
+
+```sh
+cargo run --example offline_demo
+```
+
+It starts a mock Fleet API on a loopback port, drives the real client against it and checks its claims
+against what the server received. Two of its eight scenes:
+
+```text
+4. A 401 on a billed endpoint: the token is repaired, the request is not re-sent
+   server saw: GET /api/1/users/region, GET /api/1/vehicles/{vin}/vehicle_data
+   ok the first call returns the 401 as an Auth error
+   ok the error says the call was billed
+   ok billed requests after the first call: 1 (not sent again)
+   server saw: GET /api/1/users/region (x2), GET /api/1/vehicles/{vin}/vehicle_data (x2)
+   ok the next call succeeds
+   ok billed requests in total: 2 (one per call)
+   ok the server saw the rejected token once, then the newly issued one
+   .. the refresh below is counted by this example's stand-in for the token endpoint
+   ok token refreshes: 1
+
+6. A token that carries a command scope: refused before anything is sent
+   server saw: nothing
+   ok the call fails with CommandScopeOnReadToken
+   ok requests of any kind the server received: 0
+```
+
+The other scenes cover a sleeping car's billed call being skipped, a 408 not being retried, a free
+call recovering from a 401 by itself, a region answer that names another server not being adopted, and
+an error body being scrubbed. It exits non-zero if any claim stops being true. What it does not show is
+the GET-only rule: that is a property of the code, enforced by the sealed endpoint trait, a clippy
+deny-list and a CI gate, not something a run can demonstrate.
 
 ## Quick start
 
@@ -54,8 +102,8 @@ everything below.
 
 The crate builds on Linux and macOS (CI runs on Linux).
 
-1. Get the code. The example lives in the repository, so clone it; the commands below work from
-   anywhere inside the clone.
+1. Get the code. The example lives in the repository, so clone it, and run the commands below
+   from the repository root.
 
    ```sh
    git clone https://github.com/fleetwire-dev/fleetwire-rs
@@ -99,15 +147,14 @@ The crate builds on Linux and macOS (CI runs on Linux).
 
 | You see | Usual cause |
 |---|---|
-| `set TESLA_CLIENT_ID …` / `set FLEETWIRE_TOKEN_DIR …` | The environment variable is missing. |
+| `error: set TESLA_CLIENT_ID … and FLEETWIRE_TOKEN_DIR …` | One or both environment variables are missing. |
 | `token refresh failed: HTTP 400 … client_not_found` | The client id is wrong, or belongs to another app. |
 | Any other `token refresh failed: HTTP 4xx …` | The refresh token is mistyped, expired, already rotated, or was issued to a different client id. Tesla's own message follows the status. |
-| `token directory permissions are too permissive` | The directory or `tokens.json` is readable by others: `chmod 700 ~/.fleetwire && chmod 600 ~/.fleetwire/tokens.json`. |
-| `token file not found` | `FLEETWIRE_TOKEN_DIR` points at a directory without `tokens.json` (step 2). |
+| `error: authentication error: token directory: token directory permissions are too permissive` (or `token file permissions …`) | The directory or `tokens.json` is readable by others: `chmod 700 ~/.fleetwire && chmod 600 ~/.fleetwire/tokens.json`. The directory is checked first, so this is what you see even when `tokens.json` is missing as well. |
+| `… token file not found` | `FLEETWIRE_TOKEN_DIR` points at an owner-only directory without `tokens.json` (step 2). |
 | A scope error before any request is sent | The token lacks `vehicle_device_data`; re-authorize the app with that scope. |
 
-4. Use it from your code. Add the dependency (`cargo add fleetwire`, once published — until then, a
-   `path` or `git` dependency on this repository), then:
+4. Use it from your code. Add the dependency (`cargo add fleetwire`), then:
 
    ```rust,no_run
    use std::sync::Arc;
@@ -157,8 +204,8 @@ The other free ones include `ListVehicles`, `GetRecentAlerts`, `GetReleaseNotes`
 ## Calls that cost money
 
 Of the sixteen endpoints this crate models, two are billed: `GetVehicleData` and
-`GetNearbyChargingSites` (measured: $0.002 per request, and a 408 from a sleeping vehicle is billed too).
-The other fourteen are not.
+`GetNearbyChargingSites` ($0.002 per request; a 408 from a sleeping vehicle was measured to use up a
+quota slot like a successful call, and the crate counts it as billed). The other fourteen are not.
 
 `examples/guarded_vehicle_data` shows the safe way to make a billed call: it reads the battery level
 through `Client::send_guarded`, which skips the billed request when the car is not online.
@@ -174,14 +221,27 @@ through `Client::send_guarded`, which skips the billed request when the car is n
 endpoint. `send_guarded` narrows the window but cannot close it: the car can fall asleep between the free
 check and the billed call.
 
+## Design
+
+How the crate is put together, and why, is written up in the repository:
+[architecture](https://github.com/fleetwire-dev/fleetwire-rs/blob/main/docs/architecture.md) (the send
+loop, billing judgment, token layer, redaction) and
+[how this is built](https://github.com/fleetwire-dev/fleetwire-rs/blob/main/docs/how-this-is-built.md)
+(the review and gate workflow, with the defects it caught here).
+
 ## Status
 
 Early release. The API may change before 1.0.
 
-The sixteen modelled GET endpoints (12 vehicle, 4 user) were verified against live responses. Not
-implemented: vehicle commands and anything that writes — this crate has no POST or signing code and is
-not a route to one — and the charging, energy and partner endpoints, which are left out until a live
-response can verify their shape.
+The sixteen modelled GET endpoints (12 vehicle, 4 user) are the ones that were exercised against the
+live API. That is not sixteen verified response shapes: a response is strongly typed only where a real
+one was observed and stays raw JSON elsewhere, `mobile_enabled` answers 403 to a read-only token, and
+`nearby_charging_sites` has only been seen answering 408 because the car was asleep each time. The crate
+documentation lists what was measured, what was not, and what would settle each open question.
+
+Not implemented: vehicle commands and anything that writes — the only request this crate sends that is
+not a GET is the OAuth token refresh, it has no signing code, and it is not a route to either — and the
+charging, energy and partner endpoints, which are left out until a live response can verify their shape.
 
 A custom `TokenRefresher` must bound its own request time: `TokenManager` holds a cross-process file lock
 while a refresh runs.
