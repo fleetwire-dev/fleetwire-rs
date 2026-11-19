@@ -1640,6 +1640,14 @@ fn validate_region_url(raw: &str, allowed: &[String]) -> Result<crate::Url, Erro
     Ok(url)
 }
 
+/// [`validate_region_url`] against the default allow-list, for the fuzz target in `fuzz/`.
+/// Compiled only under `--cfg fuzzing`.
+#[cfg(fuzzing)]
+pub(crate) fn fuzz_accepted_region_url(raw: &str) -> Option<crate::Url> {
+    let allowed: Vec<String> = TESLA_REGION_HOSTS.iter().map(|h| (*h).to_owned()).collect();
+    validate_region_url(raw, &allowed).ok()
+}
+
 /// What [`Client::send_inner`] turns one raw response into.
 ///
 /// **The only axis on which `send`, `send_metered` and [`Client::send_raw`]

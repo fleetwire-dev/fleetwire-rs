@@ -276,6 +276,60 @@ mod sealed;
 mod test_support;
 mod transport;
 
+/// Entry points for the fuzz targets in the repository's `fuzz/` directory.
+///
+/// Compiled only under `--cfg fuzzing`, which `cargo fuzz` sets. Nothing here exists in a
+/// normal build, and it is not part of the public API. Each function hands untrusted bytes to
+/// one of the places that read them: a response body, a token, a header value, a region URL.
+#[cfg(fuzzing)]
+#[doc(hidden)]
+pub mod fuzz {
+    /// A redacted preview of `raw`, at most `max` bytes.
+    pub fn body_preview(raw: &str, max: usize) -> String {
+        crate::redaction::body_preview(raw, max)
+    }
+
+    /// Decodes one response the way the client does, and formats the error if there is one.
+    pub fn decode(status: u16, content_type: Option<&str>, body: &[u8], billed: bool) {
+        let Ok(status) = http::StatusCode::from_u16(status) else {
+            return;
+        };
+        let pricing = if billed {
+            crate::Pricing::data()
+        } else {
+            crate::Pricing::NotCharged
+        };
+        let decoded = crate::decode::decode::<serde_json::Value>(
+            status,
+            content_type,
+            body,
+            pricing,
+            None,
+            None,
+        );
+        if let Err(e) = decoded {
+            std::hint::black_box(format!("{e} {e:?} {:?}", e.billing()));
+        }
+    }
+
+    /// Runs both unverified scope observations over `token`.
+    pub fn observe_token(token: &str) {
+        let need = crate::ScopeExpr::One(crate::Scope::VehicleDeviceData);
+        std::hint::black_box(crate::auth::observe_forbidden(token));
+        std::hint::black_box(crate::auth::observe_scopes(token, &need));
+    }
+
+    /// The parsed region URL when the default allow-list accepts `raw`.
+    pub fn accepted_region_url(raw: &str) -> Option<crate::Url> {
+        crate::client::fuzz_accepted_region_url(raw)
+    }
+
+    /// Parses a `Retry-After` header value.
+    pub fn retry_after(raw: &str) -> Option<std::time::Duration> {
+        crate::transport::parse_retry_after(raw)
+    }
+}
+
 // Crate-root re-exports of the types callers touch on nearly every call
 // (design §2's module map, the `lib.rs` entry). Final fix wave (F11):
 // there were none, so the shortest way to name the error type was
