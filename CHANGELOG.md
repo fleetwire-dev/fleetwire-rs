@@ -6,6 +6,49 @@ All notable changes to `fleetwire` are recorded here. The format follows
 
 ## [Unreleased]
 
+No change to the library's public API.
+
+### Added
+
+- `examples/offline_demo`: drives the real client against a mock Fleet API on a loopback port and
+  checks 23 claims against what the server received. It shows a sleeping car's billed call being
+  skipped, a billed request not being sent again after a 401 or a 408, a token with a command
+  scope being refused before anything is sent, a region answer that names another server not
+  being adopted, and an error body being scrubbed. It needs no token and exits non-zero if a
+  claim stops holding.
+- `examples/guarded_vehicle_data` says what a call spent, and `examples/pricing_table` says that
+  its prices are the request types' own values and not a live tariff.
+- `scripts/check_invariants.py`: invariant gates (GET only, exactly two billed endpoints, no default
+  retry, one HTTP agent with redirects and proxies off, no `Debug` on secret-holding types, sealed
+  endpoint trait, English comments, error-message style, no `unsafe`, dependency budget), each with
+  a self-test that plants the violation. CI runs them in a new `invariants` job, together with the
+  two examples that need no account.
+- `fuzz/`: four `cargo fuzz` targets for the code that reads untrusted bytes (redaction, response
+  decoding, the unverified scope check, the region URL check and `Retry-After`), with a weekly
+  smoke run in CI. Their entry points are in `fleetwire::fuzz`, which exists only under
+  `--cfg fuzzing` and is not part of the public API.
+- `docs/architecture.md`, `docs/safety-boundaries.md` and `docs/how-this-is-built.md`.
+- `AGENTS.md`, `REVIEW.md`, `scripts/risk_tier.py` and `.claude/`: the instructions, review standard
+  and hooks coding agents work under in this repository.
+- `README.ko.md`: a Korean summary.
+
+### Fixed
+
+- A body read that timed out a moment before the request deadline was reported as a generic I/O
+  error. It is now reported as a timeout. Only the message changes; the retry and billing judgments
+  were already the same for both.
+
+### Changed
+
+- Source comments and test failure messages are now in English throughout, and comments that
+  still described the earlier HTTP stack were corrected.
+- `examples/list_vehicles` and `examples/guarded_vehicle_data` name both missing environment
+  variables in one message. The "If it fails" table quotes the full error text.
+- The crate README no longer says that all sixteen endpoints were verified against live
+  responses: it says which were exercised, and that a response is strongly typed only where a
+  real one was observed.
+- The repository README explains what the crate refuses to do and where each refusal is tested.
+
 ## [0.2.0] - 2026-11-15
 
 No change to the library's API or behaviour since 0.1.0; this release adds examples and documentation.
