@@ -13,7 +13,8 @@ An **unofficial, read-only** Rust client for the Tesla Fleet API that knows whic
 
 [한국어 요약](README.ko.md) · [Quick start](crates/fleetwire/README.md#quick-start) ·
 [Architecture](docs/architecture.md) · [Safety boundaries](docs/safety-boundaries.md) ·
-[How this is built](docs/how-this-is-built.md) · [Design history](docs/design/README.md)
+[How this is built](docs/how-this-is-built.md) · [Design history](docs/design/README.md) ·
+[Roadmap](ROADMAP.md)
 
 ## Why this exists
 
