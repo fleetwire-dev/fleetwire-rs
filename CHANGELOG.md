@@ -6,7 +6,16 @@ All notable changes to `fleetwire` are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-26
+
 No change to the library's public API.
+
+### Release process
+
+- Published from CI by crates.io trusted publishing: the release job exchanges its OIDC token for a
+  short-lived publish token, and no registry token is stored in the repository.
+- `cargo-semver-checks` compares the public API with the newest release on crates.io, in CI and
+  again in the release job before publishing.
 
 ### Added
 
@@ -48,6 +57,8 @@ No change to the library's public API.
   responses: it says which were exercised, and that a response is strongly typed only where a
   real one was observed.
 - The repository README explains what the crate refuses to do and where each refusal is tested.
+- The comment on `GetRegion::required_scopes` now says which accepted scopes were measured and
+  which were not. The scope expression itself is unchanged.
 
 ## [0.2.0] - 2026-11-15
 

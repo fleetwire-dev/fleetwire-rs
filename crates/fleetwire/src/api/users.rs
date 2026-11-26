@@ -22,9 +22,11 @@ impl FleetGet for GetRegion {
     passthrough_endpoint!(GetRegion, RegionInfo);
 
     fn required_scopes(&self) -> ScopeExpr {
-        // O1 measurement: the region lookup is lenient about scopes. Any single modeled scope
-        // out of the measured token's scp (openid, offline_access, vehicle_device_data,
-        // vehicle_location) is enough to pass.
+        // O1 measurement: the region lookup passed with a token whose scp held openid,
+        // offline_access, vehicle_device_data and vehicle_location. The expression accepts any
+        // one of openid, user_data or vehicle_device_data. user_data was not in that token, so
+        // accepting it is not backed by a measurement, and a token holding only
+        // vehicle_location is refused here although Tesla may accept it.
         ScopeExpr::Any(vec![
             ScopeExpr::One(Scope::Openid),
             ScopeExpr::One(Scope::UserData),
