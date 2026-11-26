@@ -10,6 +10,12 @@ All notable changes to `fleetwire` are recorded here. The format follows
 
 No change to the library's public API.
 
+### Security
+
+- `url` is updated to 2.5.9 for RUSTSEC-2026-0592 (stack overflow in `Url::origin()` on nested
+  `blob:` URLs). This crate does not call `Url::origin()`; the update keeps the lock file clear of
+  the advisory.
+
 ### Release process
 
 - Published from CI by crates.io trusted publishing: the release job exchanges its OIDC token for a
