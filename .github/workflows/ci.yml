@@ -56,6 +56,18 @@ jobs:
           RUSTDOCFLAGS: -D warnings -A rustdoc::private_intra_doc_links
         run: cargo +stable doc --workspace --all-features --no-deps --locked
 
+  # Compares the public API with the newest fleetwire release on crates.io. A breaking change fails
+  # unless the version in crates/fleetwire/Cargo.toml says it is one (a minor bump before 1.0).
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          package: fleetwire
+
   supply-chain:
     runs-on: ubuntu-latest
     steps:
