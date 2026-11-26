@@ -8,18 +8,20 @@ All notable changes to `fleetwire` are recorded here. The format follows
 
 ## [0.2.1] - 2026-11-26
 
-No change to the library's public API.
+No change to the library's public API. One error is classified differently (see Fixed).
 
 ### Security
 
-- `url` is updated to 2.5.9 for RUSTSEC-2026-0592 (stack overflow in `Url::origin()` on nested
-  `blob:` URLs). This crate does not call `Url::origin()`; the update keeps the lock file clear of
-  the advisory.
+- The repository's lock file moves `url` to 2.5.9 for RUSTSEC-2026-0592 (stack overflow in
+  `Url::origin()` on nested `blob:` URLs). This crate does not call `Url::origin()`. A project
+  that depends on fleetwire resolves `url` in its own lock file.
 
 ### Release process
 
 - Published from CI by crates.io trusted publishing: the release job exchanges its OIDC token for a
-  short-lived publish token, and no registry token is stored in the repository.
+  short-lived publish token and no longer reads a stored registry token. The job that can request
+  that token runs only the exchange and `cargo publish`; the tests and the semver check run in a
+  job without it.
 - `cargo-semver-checks` compares the public API with the newest release on crates.io, in CI and
   again in the release job before publishing.
 
