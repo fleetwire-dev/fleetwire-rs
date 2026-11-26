@@ -2372,12 +2372,17 @@ fn zero_chain_deadline_permits_no_retries_at_all() {
 /// is only the property that holds deterministically: each backoff sleep is always
 /// clamped to `remaining` (= the time left until the deadline), so **the cumulative time
 /// spent sleeping never exceeds `retry_deadline`, whatever the jitter draws** — the only
-/// remaining overrun is the last real network round trip (local mock, a few ms), so the
-/// `retry_deadline + 200ms` slack always holds regardless of jitter. "It retried at
-/// least once" (`reqs.len() > 1`) stays too — `retry_deadline` (300ms) is comfortably
-/// larger than one local round trip, so this is practically deterministic as well.
-/// `max_attempts` is left open at 5 to show that the deadline, not the retry budget, is
-/// the actual limiting factor.
+/// remaining overrun is the last real network round trip. "It retried at least once"
+/// (`reqs.len() > 1`) stays too — `retry_deadline` (300ms) is comfortably larger than one
+/// local round trip, so this is practically deterministic as well.
+///
+/// Fix round 2 (2026-11-23, flaky under the verify VM): the slack was 200ms, and the last
+/// round trip plus mock start-up overran it in 3 of 12 solo runs (total 502ms). The slack is
+/// now 1s. To keep the negative control strong with the wider slack, `max_attempts` is 10:
+/// without the deadline the nine full-jitter sleeps have base values summing to about 51s
+/// (the last ones 6.4s, 12.8s, 25.6s), so finishing under 1.3s by chance needs all of the
+/// large draws to be small at once (well under 1 in 1,000). The retry budget is still left
+/// open so that the deadline, not `max_attempts`, is the limiting factor.
 #[test]
 fn nonzero_chain_deadline_cuts_off_mid_retry() {
     let server = MockServer::start();
@@ -2388,7 +2393,7 @@ fn nonzero_chain_deadline_cuts_off_mid_retry() {
     let retry_deadline = std::time::Duration::from_millis(300);
     let (b, _dir) = test_client_builder(&server);
     let c = b
-        .max_attempts(5)
+        .max_attempts(10)
         .retry_deadline(retry_deadline)
         .build()
         .unwrap();
@@ -2399,7 +2404,7 @@ fn nonzero_chain_deadline_cuts_off_mid_retry() {
 
     assert!(matches!(&e, Error::Api { status, .. } if status.as_u16() == 503));
     assert!(
-        elapsed < retry_deadline + std::time::Duration::from_millis(200),
+        elapsed < retry_deadline + std::time::Duration::from_secs(1),
         "🔴 deadline did not cut the backoff sleep — total {elapsed:?} (budget {retry_deadline:?})"
     );
 
