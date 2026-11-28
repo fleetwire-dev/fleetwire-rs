@@ -17,13 +17,19 @@
 //! assert_eq!(cost_of_request(&free), Ok(Microdollars::ZERO));
 //! ```
 //!
-//! Not in this crate yet: a spending limit, a ledger file, refusing a call. Those come later in
-//! the 0.3.0 work.
+//! A [`DailyLimitGuard`] refuses a paid call before it is sent when it would take the day's total
+//! above a limit. It counts only the calls that pass through it, keeps the total in memory, and
+//! takes the day from the caller ([`DayKey`]) instead of reading the system clock.
+//!
+//! Not in this crate yet: a ledger file that keeps the total across runs. It comes later in the
+//! 0.3.0 work.
 
 mod cost;
+mod limit;
 mod money;
 mod table;
 
 pub use cost::{CostError, cost_of_pricing, cost_of_request, cost_of_units};
+pub use limit::{DailyLimitGuard, DayKey, GuardError, LimitError, check_daily_limit};
 pub use money::Microdollars;
 pub use table::{Category, MONTHLY_DISCOUNT};
