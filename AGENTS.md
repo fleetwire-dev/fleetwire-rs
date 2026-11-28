@@ -94,6 +94,8 @@ failures. A truncated tail of output is not a result.
 
 - Never put a real token, VIN, coordinate, account identifier or raw API response in code, a
   test, a fixture, an issue or a commit message. Use made-up values that are obviously made up.
+  Every issue form opens with that warning, and its names and labels are plain English
+  [`issue-forms`].
 - Never `git add -A` or `git add .` (a hook refuses it). Stage explicit paths and read
   `git diff --cached`.
 - Never push, merge, tag, publish to crates.io or change repository settings without the
