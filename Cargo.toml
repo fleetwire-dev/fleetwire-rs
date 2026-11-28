@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/fleetwire", "crates/fleetwire-testkit"]
+members = ["crates/fleetwire", "crates/fleetwire-cost", "crates/fleetwire-testkit"]
 
 # Versions of the dependencies both crates share, pinned in one place.
 [workspace.dependencies]
