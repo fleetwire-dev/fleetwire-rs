@@ -76,7 +76,7 @@ As of 2026-11-20:
 | | |
 |---|---|
 | Endpoints | 16 GET endpoints (12 vehicle, 4 user); 2 are billed. A response is strongly typed only where a live one was observed, and stays raw JSON elsewhere |
-| Tests | 442 unit tests (410 in `fleetwire`, 23 in `fleetwire-cost`, 9 in `fleetwire-testkit`), plus the README examples compiled as doctests |
+| Tests | 467 unit tests (410 in `fleetwire`, 48 in `fleetwire-cost`, 9 in `fleetwire-testkit`), plus the README examples compiled as doctests |
 | CI | stable, beta and MSRV 1.89; `clippy -D warnings`; rustdoc warnings as errors; `cargo deny`; gitleaks; invariant gates with self-tests; a weekly fuzz run |
 | Runtime | synchronous (`ureq` + rustls), no async runtime |
 | `unsafe` | forbidden workspace-wide; product code is linted against `unwrap` and `panic` |
@@ -118,7 +118,7 @@ instructions agents work under in this repository.
 | Path | What it is |
 |---|---|
 | `crates/fleetwire` | The client library, published to crates.io as [`fleetwire`](https://crates.io/crates/fleetwire). Start with its [README](crates/fleetwire/README.md). |
-| `crates/fleetwire-cost` | Tesla's published price table and the cost of a call worked out before it is sent, in whole microdollars. The start of the 0.3.0 work; no limit or ledger yet. Not published yet. |
+| `crates/fleetwire-cost` | Tesla's published price table and the cost of a call worked out before it is sent, in whole microdollars. A daily limit that refuses a paid call before it is sent, counted in memory. Part of the 0.3.0 work; no ledger file yet. Not published yet. |
 | `crates/fleetwire-testkit` | A small mock HTTP server on std networking (no async runtime), used by the tests and by `offline_demo`. Not published. |
 | `docs/` | Architecture, safety boundaries and the development workflow. `docs/design/` holds the original specifications, plans and hand-over notes the crate was built from. |
 | `fuzz/` | Fuzz targets for the code that reads bytes the crate did not write: response bodies, tokens, the region URL. |
