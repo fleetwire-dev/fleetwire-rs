@@ -80,6 +80,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fleetwire-cost"
+version = "0.1.0"
+dependencies = [
+ "fleetwire",
+]
+
+[[package]]
 name = "fleetwire-testkit"
 version = "0.2.0"
 dependencies = [

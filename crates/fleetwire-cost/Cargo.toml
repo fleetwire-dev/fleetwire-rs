@@ -1,0 +1,21 @@
+[package]
+name = "fleetwire-cost"
+version = "0.1.0"
+description = "Tesla Fleet API price table and pre-call cost calculation for fleetwire"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords = ["tesla", "fleet", "api", "billing", "cost"]
+categories = ["api-bindings"]
+# Not published until the 0.3.0 release adds the daily limit and the ledger.
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The request types and their `Pricing` category; the cost of a call is read from them.
+fleetwire = { path = "../fleetwire", version = "0.2.1" }
