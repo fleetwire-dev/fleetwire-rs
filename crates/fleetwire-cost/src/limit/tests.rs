@@ -130,7 +130,11 @@ fn a_total_that_overflows_is_refused() {
             Microdollars::new(u64::MAX - 1_999),
             Ok(DATA)
         ),
-        Err(LimitError::Cost(CostError::Overflow))
+        Err(LimitError::Exceeded {
+            limit: Microdollars::new(u64::MAX),
+            spent: Microdollars::new(u64::MAX - 1_999),
+            cost: DATA,
+        })
     );
     // One microdollar less and the same sum fits exactly at the limit.
     assert_eq!(
@@ -311,6 +315,32 @@ fn an_earlier_day_does_not_reopen_the_budget() {
     ));
     assert_eq!(net.calls(), 1);
     assert_eq!(guard.spent(DayKey::new(10)), DATA);
+}
+
+#[test]
+fn an_admitted_earlier_day_does_not_move_the_day_back() {
+    // Room for two calls a day. An earlier key that is admitted must not become the current day,
+    // or the next call on the real day would start a fresh total.
+    let mut guard = DailyLimitGuard::new(DATA.checked_add(DATA).unwrap());
+    let net = FakeSend::new();
+    assert_eq!(guard.send(DayKey::new(11), &paid(), net.ok()), Ok(()));
+    assert_eq!(guard.send(DayKey::new(10), &paid(), net.ok()), Ok(()));
+    assert!(matches!(
+        guard.send(DayKey::new(11), &paid(), net.ok()),
+        Err(GuardError::Refused(LimitError::Exceeded { .. }))
+    ));
+    assert_eq!(net.calls(), 2);
+}
+
+#[test]
+fn a_later_day_stays_current_until_a_still_later_one() {
+    let mut guard = DailyLimitGuard::new(DATA);
+    let net = FakeSend::new();
+    assert_eq!(guard.send(DayKey::new(1_000), &paid(), net.ok()), Ok(()));
+    // Back on the real day, the calls still count against day 1,000.
+    assert!(guard.send(DayKey::new(11), &paid(), net.ok()).is_err());
+    assert_eq!(guard.send(DayKey::new(1_001), &paid(), net.ok()), Ok(()));
+    assert_eq!(net.calls(), 2);
 }
 
 #[test]

@@ -76,7 +76,7 @@ As of 2026-11-20:
 | | |
 |---|---|
 | Endpoints | 16 GET endpoints (12 vehicle, 4 user); 2 are billed. A response is strongly typed only where a live one was observed, and stays raw JSON elsewhere |
-| Tests | 465 unit tests (410 in `fleetwire`, 46 in `fleetwire-cost`, 9 in `fleetwire-testkit`), plus the README examples compiled as doctests |
+| Tests | 467 unit tests (410 in `fleetwire`, 48 in `fleetwire-cost`, 9 in `fleetwire-testkit`), plus the README examples compiled as doctests |
 | CI | stable, beta and MSRV 1.89; `clippy -D warnings`; rustdoc warnings as errors; `cargo deny`; gitleaks; invariant gates with self-tests; a weekly fuzz run |
 | Runtime | synchronous (`ureq` + rustls), no async runtime |
 | `unsafe` | forbidden workspace-wide; product code is linted against `unwrap` and `panic` |

@@ -8,6 +8,11 @@
 //! The guard counts only the calls that pass through it. It does not read the system clock: the
 //! caller names the day with a [`DayKey`] on every call, and a later day starts a new total. It
 //! does not write anything to disk; the total is lost when the guard is dropped.
+//!
+//! The day only moves forward. A call named with a far later day (a clock that jumped ahead, or a
+//! wrong [`DayKey::new`]) makes that the current day, and every call after it is counted against
+//! that day until a later key comes or the guard is replaced. This fails towards refusing, not
+//! towards spending. There is no reset method; build a new guard to start over.
 
 use std::fmt;
 
@@ -91,7 +96,8 @@ impl std::error::Error for LimitError {
 /// Returns today's total after the call. The call is refused when that total would be above
 /// `limit`; a total exactly at the limit is allowed. A call that costs nothing is always allowed,
 /// even when today's total is already over the limit. A cost that could not be worked out
-/// (`Err`) is refused, never treated as zero, and so is a total that does not fit in a `u64`.
+/// (`Err`) is refused, never treated as zero. A total that does not fit in a `u64` is above the
+/// limit and is refused as [`LimitError::Exceeded`].
 pub fn check_daily_limit(
     limit: Microdollars,
     spent: Microdollars,
@@ -103,8 +109,8 @@ pub fn check_daily_limit(
     }
     match spent.checked_add(cost) {
         Some(total) if total <= limit => Ok(total),
-        Some(_) => Err(LimitError::Exceeded { limit, spent, cost }),
-        None => Err(LimitError::Cost(CostError::Overflow)),
+        // A sum too large for a u64 is above any u64 limit.
+        Some(_) | None => Err(LimitError::Exceeded { limit, spent, cost }),
     }
 }
 
