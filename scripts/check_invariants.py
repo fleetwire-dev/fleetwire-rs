@@ -173,6 +173,7 @@ class Tree:
         files = {}
         patterns = ("crates/**/*.rs", "crates/**/Cargo.toml", "crates/**/clippy.toml", "Cargo.toml")
         patterns += (".claude/settings.json", ".claude/agents/*.md", ".claude/hooks/*")
+        patterns += (".github/ISSUE_TEMPLATE/*.yml", ".github/ISSUE_TEMPLATE/*.yaml", "SECURITY.md")
         for pattern in patterns:
             for p in root.glob(pattern):
                 if "target" not in p.parts and p.is_file():
@@ -434,6 +435,54 @@ def gate_harness(tree):
     return bad
 
 
+FORMS = ".github/ISSUE_TEMPLATE/"
+ADVISORIES = "https://github.com/fleetwire-dev/fleetwire-rs/security/advisories/new"
+REDACT_WORDS = ("do not paste", "token", "vin", "coordinate")
+FORM_TEXT_LINE = re.compile(r"^\s*(?:-\s+)?(name|description|label|labels|title)\s*:\s*(.*)$")
+
+
+def gate_issue_forms(tree):
+    """Every issue form opens with the redaction warning, and the forms and the security policy agree.
+
+    Why: an issue is public the moment it is filed. The first thing a reporter reads must tell them
+    not to paste a token, a VIN, a coordinate or a raw response, and a security report must have a
+    private route that works. Form names and labels are English without emoji, like the docs.
+    Limit: it reads the YAML as text (standard library only). It checks that the first body item
+    is a markdown block carrying the warning, not how GitHub renders the form.
+    """
+    bad = []
+    forms = sorted(k for k in tree.files if k.startswith(FORMS) and k.rsplit("/", 1)[-1] not in ("config.yml", "config.yaml"))
+    if not forms:
+        bad.append(f"{FORMS}: no issue form found")
+    for path in forms:
+        text = tree.files[path]
+        body = re.split(r"(?m)^body\s*:\s*$", text, maxsplit=1)
+        items = re.split(r"(?m)^\s*-\s+type\s*:\s*", body[1]) if len(body) == 2 else []
+        first = items[1] if len(items) > 1 else ""
+        if not first.startswith("markdown"):
+            bad.append(f"{path}: the first body item is not the markdown warning")
+        elif not all(w in first.lower() for w in REDACT_WORDS):
+            bad.append(f"{path}: the opening markdown does not warn against pasting tokens, VINs and coordinates")
+        if not re.search(r"(?m)^labels\s*:", text):
+            bad.append(f"{path}: no `labels:` line")
+        for n, line in enumerate(text.split("\n"), 1):
+            m = FORM_TEXT_LINE.match(line)
+            if m and (HANGUL.search(m.group(2)) or EMOJI.search(m.group(2))):
+                bad.append(f"{path}:{n}: `{m.group(1)}` is not plain English (Hangul or emoji)")
+    config = tree.files.get(FORMS + "config.yml")
+    if config is None:
+        bad.append(f"{FORMS}config.yml: missing, so blank issues are allowed")
+    else:
+        if not re.search(r"(?m)^blank_issues_enabled\s*:\s*false\s*$", config):
+            bad.append(f"{FORMS}config.yml: blank issues are not turned off")
+        if ADVISORIES not in config:
+            bad.append(f"{FORMS}config.yml: no private vulnerability reporting link")
+    policy = tree.files.get("SECURITY.md", "")
+    if ADVISORIES not in policy:
+        bad.append("SECURITY.md: no private vulnerability reporting link")
+    return bad
+
+
 def dependency_faults(packages):
     """Faults in a list of `name vX.Y.Z` lines from cargo tree."""
     names = sorted({line.split()[0] for line in packages if line.strip()})
@@ -473,6 +522,7 @@ TREE_GATES = [
     ("error-style", gate_error_style),
     ("no-unsafe", gate_no_unsafe),
     ("harness", gate_harness),
+    ("issue-forms", gate_issue_forms),
 ]
 
 
@@ -546,11 +596,32 @@ def self_test(tree):
         fails.append("harness: a missing hook file was not caught")
     if gate_harness(tree.edited(reviewer, "You are the final reviewer", "You may suggest an Edit or a Write; you are the final reviewer")):
         fails.append("harness: prose that mentions a write tool was flagged")
+    bug, cfg = FORMS + "bug_report.yml", FORMS + "config.yml"
+    form_cases = [
+        (bug, "**Do not paste tokens, VINs, coordinates or raw API responses.**", "Please be careful.", True),
+        (bug, "name: Bug report", "name: Bug report \U0001F41B", True),
+        (bug, "label: What happened, and what did you expect?", "label: 무슨 일이 있었나요?", True),
+        (bug, "  - type: markdown", "  - type: input\n    id: early\n    attributes: { label: Early }\n  - type: markdown", True),
+        (bug, "labels: [bug]", "", True),
+        (cfg, "blank_issues_enabled: false", "blank_issues_enabled: true", True),
+        (cfg, ADVISORIES, "https://example.invalid/report", True),
+        ("SECURITY.md", ADVISORIES, "https://example.invalid/report", True),
+        (bug, "label: What happened, and what did you expect?", "label: What happened, and what did you expect instead?", False),
+        (bug, "Redact them first.", "Redact them first. Example: VIN 5YJ3EXAMPLE (made up).", False),
+    ]
+    for path, old, new, must_fail in form_cases:
+        got = gate_issue_forms(tree.edited(path, old, new))
+        if must_fail and not got:
+            fails.append(f"issue-forms: planted violation in {path} was not caught: {new[:60]!r}")
+        if not must_fail and got:
+            fails.append(f"issue-forms: harmless edit in {path} was flagged: {got[0]}")
+    if not gate_issue_forms(Tree({k: v for k, v in tree.files.items() if k != cfg})):
+        fails.append("issue-forms: a missing config.yml was not caught")
     if fails:
         sys.stderr.write("check_invariants self-test FAILED:\n  " + "\n  ".join(fails) + "\n")
         return 1
-    planted = sum(1 for row in PLANTED if row[4]) + 2 + 2 + 3
-    controls = sum(1 for row in PLANTED if not row[4]) + 1 + 1
+    planted = sum(1 for row in PLANTED if row[4]) + 2 + 2 + 3 + sum(1 for c in form_cases if c[3]) + 1
+    controls = sum(1 for row in PLANTED if not row[4]) + 1 + 1 + sum(1 for c in form_cases if not c[3])
     print(f"check_invariants self-test: ok ({planted} planted violations caught, {controls} harmless edits passed)")
     return 0
 
